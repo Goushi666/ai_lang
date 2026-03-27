@@ -1,7 +1,7 @@
 from datetime import datetime
 from typing import List
 
-from fastapi import APIRouter, Depends, Query
+from fastapi import APIRouter, Depends, HTTPException, Query
 from fastapi.responses import Response
 
 from app.deps import sensor_service_dep
@@ -23,8 +23,11 @@ router = APIRouter()
 
 @router.get("/latest", response_model=SensorDataResponse)
 async def get_latest_data(service: SensorService = Depends(sensor_service_dep)):
-    """获取最新传感器数据"""
-    return await service.get_latest()
+    """获取最新传感器数据；尚无上报时返回 404。"""
+    data = await service.get_latest()
+    if data is None:
+        raise HTTPException(status_code=404, detail="暂无传感器数据，请等待设备上报")
+    return data
 
 
 @router.get("/history", response_model=List[SensorDataResponse])

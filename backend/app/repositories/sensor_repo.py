@@ -1,9 +1,9 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
-from datetime import datetime, timedelta, timezone
+from datetime import datetime, timezone
 import random
-from typing import List
+from typing import List, Optional
 
 from app.schemas.sensor import SensorDataResponse
 
@@ -25,21 +25,9 @@ class SensorRepository:
     def __init__(self) -> None:
         self._data: List[_SensorSnapshot] = []
 
-        # 初始化一些模拟数据，方便前端联调
-        now = datetime.now(timezone.utc)
-        for i in range(30):
-            ts = now - timedelta(minutes=5 * i)
-            self._data.append(
-                _SensorSnapshot(
-                    device_id="dev_001",
-                    temperature=25.0 + (i % 5) * 0.2,
-                    humidity=60.0 + (i % 7) * 0.3,
-                    light=300.0 + (i % 9) * 10.0,
-                    timestamp=ts,
-                )
-            )
-
-    async def get_latest(self) -> SensorDataResponse:
+    async def get_latest(self) -> Optional[SensorDataResponse]:
+        if not self._data:
+            return None
         latest = max(self._data, key=lambda x: x.timestamp)
         return SensorDataResponse(**latest.__dict__)
 
@@ -71,25 +59,14 @@ class SensorRepository:
             )
         return "\n".join(lines)
 
-    async def simulate_tick(self) -> SensorDataResponse:
+    async def simulate_tick(self) -> Optional[SensorDataResponse]:
         """
         MVP：模拟设备产生一条新采样，用于联调 WebSocket 实时推送链路。
 
-        说明：
-        - 返回字段与 `schemas/sensor.py` 的 `SensorDataResponse` 对齐
-        - 内存列表会截断到最大长度，避免无限增长
+        无历史数据时不生成占位值，返回 None（由调用方跳过广播）。
         """
         if not self._data:
-            # 理论上不会发生（初始化时已填充），兜底即可
-            self._data.append(
-                _SensorSnapshot(
-                    device_id="dev_001",
-                    temperature=25.0,
-                    humidity=60.0,
-                    light=300.0,
-                    timestamp=datetime.now(timezone.utc),
-                )
-            )
+            return None
 
         last = max(self._data, key=lambda x: x.timestamp)
         ts = datetime.now(timezone.utc)

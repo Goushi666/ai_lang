@@ -69,6 +69,17 @@ let chart = null;
 
 // 实时数据缓存（用于图表滚动追加）
 const MAX_POINTS = 60;
+/** 与卡片展示一致：仅当温湿度光照「显示值」变化时才向趋势图加点 */
+function sensorDisplayKey(d) {
+  const t = Number(d.temperature);
+  const h = Number(d.humidity);
+  const l = Number(d.light);
+  if (!Number.isFinite(t) || !Number.isFinite(h) || !Number.isFinite(l)) return null;
+  return `${t.toFixed(1)}|${h.toFixed(1)}|${Math.round(l)}`;
+}
+
+let lastChartSampleKey = null;
+
 const timestamps = ref([]);
 const temps = ref([]);
 const hums = ref([]);
@@ -85,6 +96,7 @@ function initChart() {
       { type: "value", name: "温度/湿度", position: "left" },
       { type: "value", name: "光照", position: "right" },
     ],
+    animationDurationUpdate: 800,
     series: [
       { name: "温度(℃)", type: "line", smooth: true, data: temps.value, itemStyle: { color: "#F56C6C" } },
       { name: "湿度(%RH)", type: "line", smooth: true, data: hums.value, itemStyle: { color: "#409EFF" } },
@@ -111,6 +123,7 @@ function pushChartPoint(data) {
   }
 
   chart?.setOption({
+    animationDurationUpdate: 800,
     xAxis: { data: timestamps.value },
     series: [
       { data: temps.value },
@@ -118,6 +131,15 @@ function pushChartPoint(data) {
       { data: lights.value },
     ],
   });
+}
+
+/** 数值相对上次入图的点有变化时才更新趋势图；卡片仍每条消息都更新 */
+function maybePushChartPoint(data) {
+  const key = sensorDisplayKey(data);
+  if (key == null) return;
+  if (key === lastChartSampleKey) return;
+  lastChartSampleKey = key;
+  pushChartPoint(data);
 }
 
 /* ---------- 历史查询 ---------- */
@@ -146,7 +168,19 @@ async function fetchHistory() {
       lights.value.push(d.light);
     });
 
+    if (temps.value.length > 0) {
+      const i = temps.value.length - 1;
+      lastChartSampleKey = sensorDisplayKey({
+        temperature: temps.value[i],
+        humidity: hums.value[i],
+        light: lights.value[i],
+      });
+    } else {
+      lastChartSampleKey = null;
+    }
+
     chart?.setOption({
+      animationDurationUpdate: 800,
       xAxis: { data: timestamps.value },
       series: [
         { data: temps.value },
@@ -179,7 +213,7 @@ onMounted(async () => {
       light: payload.light,
       timestamp: payload.timestamp,
     };
-    pushChartPoint(latest.value);
+    maybePushChartPoint(latest.value);
   });
 });
 

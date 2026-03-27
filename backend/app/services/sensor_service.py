@@ -18,7 +18,7 @@ class SensorService:
     def __init__(self, repo: SensorRepository) -> None:
         self._repo = repo
 
-    async def get_latest(self) -> SensorDataResponse:
+    async def get_latest(self) -> Optional[SensorDataResponse]:
         return await self._repo.get_latest()
 
     async def get_history(self, start_time: datetime, end_time: datetime) -> List[SensorDataResponse]:
@@ -38,7 +38,9 @@ class SensorService:
           "timestamp": <ms>
         }
         """
-        data: SensorDataResponse = await self._repo.simulate_tick()
+        data = await self._repo.simulate_tick()
+        if data is None:
+            return
         ts_ms = int(data.timestamp.timestamp() * 1000)
 
         await websocket_manager.broadcast(

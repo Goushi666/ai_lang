@@ -44,8 +44,8 @@ class Settings(BaseSettings):
     MQTT_ENABLED: bool = True
     # 订阅主题，逗号分隔；传感器默认 sensor/data（与物模型/模板配置一致）
     MQTT_SUBSCRIBE_TOPICS: str = "sensor/data"
-    # 为 True 时不启动传感器模拟定时任务（仅 MQTT + 告警模拟）
-    MQTT_DISABLE_SENSOR_SIM: bool = False
+    # 为 True 时不启动传感器模拟定时任务（默认关模拟，仅用 MQTT/硬件）
+    MQTT_DISABLE_SENSOR_SIM: bool = True
 
     MQTT_PORT: int = 1883
 
