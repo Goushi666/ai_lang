@@ -9,7 +9,8 @@
 """
 
 import asyncio
-from fastapi import FastAPI
+import logging
+from fastapi import FastAPI, WebSocket
 from fastapi.middleware.cors import CORSMiddleware
 
 from app.api.v1.alarms import router as alarms_router
@@ -22,6 +23,10 @@ from app.repositories.alarm_repo import AlarmRepository
 from app.repositories.sensor_repo import SensorRepository
 from app.services.alarm_service import AlarmService
 from app.services.sensor_service import SensorService
+from app.core.config import settings
+from app.core.mqtt import mqtt_client, parse_json_payload
+
+logger = logging.getLogger(__name__)
 
 
 def create_app() -> FastAPI:
@@ -51,22 +56,25 @@ def create_app() -> FastAPI:
 
     # ---------- WebSocket 端点 ----------
     @app.websocket("/ws")
-    async def websocket_endpoint(ws):
+    async def websocket_endpoint(websocket: WebSocket):
         """
         WebSocket 连接入口。
 
         客户端连接后进入消息循环，支持心跳保活等消息处理。
         连接断开时自动从管理器中移除。
+
+        注意：首参必须标注为 ``WebSocket``。若写成 ``async def f(ws)`` 且无类型注解，
+        FastAPI 会把 ``ws`` 当成**查询参数**校验，握手失败，Uvicorn 日志里会表现为 ``WebSocket /ws 403``。
         """
-        await websocket_manager.connect(ws)
+        await websocket_manager.connect(websocket)
         try:
             while True:
                 # 接收客户端消息（如心跳 ping）
-                data = await ws.receive_text()
-                await websocket_manager.handle_client_message(ws, data)
+                data = await websocket.receive_text()
+                await websocket_manager.handle_client_message(websocket, data)
         finally:
             # 连接断开时清理
-            await websocket_manager.disconnect(ws)
+            await websocket_manager.disconnect(websocket)
 
     # ---------- 应用生命周期事件 ----------
     @app.on_event("startup")
@@ -77,8 +85,36 @@ def create_app() -> FastAPI:
         MVP 阶段使用模拟数据驱动 WebSocket 推送链路，
         后续替换为真实 MQTT 设备数据接入。
         """
-        sensor_service = SensorService(repo=SensorRepository())
+        # 单一 SensorRepository 实例：MQTT 与 REST /api/sensors/latest 共用同一份内存数据
+        sensor_repo = SensorRepository()
+        sensor_service = SensorService(repo=sensor_repo)
         alarm_service = AlarmService(repo=AlarmRepository())
+
+        # ---------- MQTT 接入（sensor/data 等，见 settings.MQTT_SUBSCRIBE_TOPICS）----------
+        def on_mqtt_message(topic: str, payload: str) -> None:
+            """
+            在 asyncio 事件循环线程中执行（由 mqtt_client 通过 call_soon_threadsafe 投递）。
+
+            将 JSON 解析为 dict 后写入 SensorService，内部会：
+            - 更新内存仓库（REST 可读到最新值）
+            - 按前端协议广播 type=sensor_data
+            """
+            parsed = parse_json_payload(payload)
+
+            async def _handle() -> None:
+                if isinstance(parsed, dict):
+                    try:
+                        await sensor_service.ingest_mqtt_payload_dict(parsed)
+                    except Exception:
+                        logger.exception("处理 MQTT 传感器消息失败 topic=%s", topic)
+                else:
+                    logger.debug("MQTT 非 object JSON，跳过传感器入库 topic=%s", topic)
+
+            asyncio.create_task(_handle())
+
+        if settings.MQTT_ENABLED:
+            mqtt_client.set_message_handler(on_mqtt_message)
+            await mqtt_client.start()
 
         async def sensor_loop() -> None:
             """传感器数据模拟循环：每 5 秒生成一条数据并广播给前端。"""
@@ -100,7 +136,10 @@ def create_app() -> FastAPI:
                 await asyncio.sleep(20)
 
         # 将后台任务挂载到 app.state，方便关闭时取消
-        app.state._sensor_task = asyncio.create_task(sensor_loop())
+        if settings.MQTT_DISABLE_SENSOR_SIM:
+            app.state._sensor_task = None
+        else:
+            app.state._sensor_task = asyncio.create_task(sensor_loop())
         app.state._alarm_task = asyncio.create_task(alarm_loop())
 
     @app.on_event("shutdown")
@@ -110,6 +149,8 @@ def create_app() -> FastAPI:
             task = getattr(app.state, attr, None)
             if task:
                 task.cancel()
+        if settings.MQTT_ENABLED:
+            await mqtt_client.stop()
 
     return app
 

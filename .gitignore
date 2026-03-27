@@ -23,7 +23,7 @@ env/
 *.log
 
 # Node / Frontend
-web-frontend/node_modules/
+node_modules/
 web-frontend/dist/
 *.local
 

@@ -1,5 +1,5 @@
 from datetime import datetime
-from typing import List
+from typing import Any, List, Optional
 
 from app.repositories.sensor_repo import SensorRepository
 from app.schemas.sensor import SensorDataResponse
@@ -54,4 +54,43 @@ class SensorService:
                 "timestamp": ts_ms,
             }
         )
+
+    async def broadcast_sensor_record(self, data: SensorDataResponse) -> None:
+        """将已持久化（内存）的采样按前端协议广播（与 push_sensor_data 的 WebSocket 结构一致）。"""
+        ts_ms = int(data.timestamp.timestamp() * 1000)
+        await websocket_manager.broadcast(
+            {
+                "type": "sensor_data",
+                "payload": {
+                    "deviceId": data.device_id,
+                    "temperature": data.temperature,
+                    "humidity": data.humidity,
+                    "light": data.light,
+                    "timestamp": ts_ms,
+                },
+                "timestamp": ts_ms,
+            }
+        )
+
+    async def ingest_mqtt_payload_dict(self, data: dict[str, Any]) -> Optional[SensorDataResponse]:
+        """
+        将 MQTT JSON（已解析为 dict）规范化后写入仓库并广播。
+
+        字段兼容常见别名：deviceId/device_id/deviceName、temp、temperature、hum、humidity、lux、light 等。
+        """
+        from app.core.mqtt import normalize_sensor_dict
+
+        normalized = normalize_sensor_dict(data)
+        if not normalized:
+            return None
+
+        rec = await self._repo.ingest_reading(
+            device_id=normalized["device_id"],
+            temperature=normalized["temperature"],
+            humidity=normalized["humidity"],
+            light=normalized["light"],
+            timestamp=normalized["timestamp"],
+        )
+        await self.broadcast_sensor_record(rec)
+        return rec
 
