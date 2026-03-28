@@ -76,23 +76,28 @@ class SensorRepository:
 
     async def simulate_tick(self) -> Optional[SensorDataResponse]:
         """
-        基于库内最新一条做小幅扰动并插入；无数据时返回 None。
+        基于库内最新一条做小幅扰动并插入；无数据时插入种子记录。
         """
         async with self._session_factory() as session:
             stmt = select(SensorData).order_by(SensorData.timestamp.desc()).limit(1)
             result = await session.execute(stmt)
             last = result.scalar_one_or_none()
-            if last is None:
-                return None
 
             ts = datetime.now(timezone.utc)
             ts_naive = _to_naive_utc(ts)
-            next_temp = round(last.temperature + random.uniform(-0.3, 0.3), 2)
-            next_hum = round(last.humidity + random.uniform(-0.5, 0.5), 2)
-            next_light = round(last.light + random.uniform(-20.0, 20.0), 2)
+
+            if last is None:
+                # 无历史数据时插入种子记录
+                next_temp, next_hum, next_light = 25.0, 50.0, 300.0
+                device_id = "device_001"
+            else:
+                next_temp = round(last.temperature + random.uniform(-0.3, 0.3), 2)
+                next_hum = round(last.humidity + random.uniform(-0.5, 0.5), 2)
+                next_light = round(last.light + random.uniform(-20.0, 20.0), 2)
+                device_id = last.device_id
 
             row = SensorData(
-                device_id=last.device_id,
+                device_id=device_id,
                 temperature=next_temp,
                 humidity=next_hum,
                 light=next_light,

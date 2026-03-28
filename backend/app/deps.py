@@ -11,7 +11,6 @@ from fastapi import Depends, HTTPException, Request
 
 from app.core.config import settings
 from app.core.security import get_optional_current_user
-from app.repositories.alarm_repo import AlarmRepository
 from app.repositories.vehicle_repo import VehicleRepository
 from app.services.agent_service import AgentService
 from app.services.alarm_service import AlarmService
@@ -25,10 +24,9 @@ def sensor_service_dep(request: Request) -> SensorService:
     return SensorService(repo=repo)
 
 
-def alarm_service_dep() -> AlarmService:
-    # MVP：告警历史/配置先用内存仓库
-    repo = AlarmRepository()
-    return AlarmService(repo=repo)
+def alarm_service_dep(request: Request) -> AlarmService:
+    # 与 startup 共用同一内存仓库，否则每次请求新建会导致阈值保存无效
+    return AlarmService(repo=request.app.state.alarm_repo)
 
 
 def vehicle_service_dep() -> VehicleService:
@@ -42,7 +40,7 @@ def analysis_service_dep(request: Request) -> AnalysisService:
         raise HTTPException(status_code=503, detail="环境分析已关闭")
     return AnalysisService(
         sensor_repo=request.app.state.sensor_repo,
-        alarm_service=AlarmService(repo=AlarmRepository()),
+        alarm_service=AlarmService(repo=request.app.state.alarm_repo),
     )
 
 

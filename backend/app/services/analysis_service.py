@@ -593,6 +593,29 @@ class AnalysisService:
             bucket=bucket,
         )
 
+    async def get_monitoring_anomalies_recent(
+        self,
+        *,
+        hours: float = 24.0,
+        device_id: Optional[str] = None,
+    ) -> "MonitoringAnomaliesResponse":
+        """环境监测页：过去 24h 内（可缩短）异常片段列表。"""
+        from app.schemas.monitoring import MonitoringAnomaliesResponse
+
+        now = datetime.now(timezone.utc)
+        h = min(max(hours, 1.0), 24.0)
+        summary = await self.get_environment_summary(
+            start_time=now - timedelta(hours=h),
+            end_time=now,
+            device_id=device_id if device_id and device_id.strip() else None,
+            bucket=None,
+        )
+        return MonitoringAnomaliesResponse(
+            anomalies=summary.anomalies,
+            summary_label=summary.summary_label,
+            summary_code=summary.summary_code,
+        )
+
     def build_anomalies_csv(self, summary: EnvironmentSummaryResponse) -> str:
         lines = [
             "rule_id,metric,start_time,end_time,peak,threshold,device_id,detail_zh",

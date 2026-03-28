@@ -81,7 +81,7 @@ class AlarmRepository:
         return self._config_store["default"]
 
     async def update_config(self, config: AlarmConfig) -> None:
-        self._config_store["default"] = config
+        self._config_store["default"] = config.model_copy(deep=True)
 
     async def simulate_alarm_trigger(self) -> AlarmResponse:
         """

@@ -18,6 +18,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from app.api.v1.agent import router as agent_router
 from app.api.v1.alarms import router as alarms_router
 from app.api.v1.analysis import router as analysis_router
+from app.api.v1.monitoring import router as monitoring_router
 from app.api.v1.sensors import router as sensors_router
 from app.api.v1.vehicles import router as vehicles_router
 from app.api.v1.devices import router as devices_router
@@ -53,6 +54,7 @@ def create_app() -> FastAPI:
     app.include_router(vehicles_router, prefix="/api/vehicle", tags=["vehicle"])   # 车辆控制接口
     app.include_router(devices_router, prefix="/api/devices", tags=["devices"])    # 设备管理接口
     app.include_router(analysis_router, prefix="/api/analysis", tags=["analysis"])  # 环境分析（框架）
+    app.include_router(monitoring_router, prefix="/api/monitoring", tags=["monitoring"])  # 环境监测页
     app.include_router(agent_router, prefix="/api/agent", tags=["agent"])          # 智能 Agent（框架）
 
     # ---------- 健康检查端点 ----------
@@ -96,8 +98,10 @@ def create_app() -> FastAPI:
         session_factory = get_session_factory()
         sensor_repo = SensorRepository(session_factory)
         app.state.sensor_repo = sensor_repo
+        alarm_repo = AlarmRepository()
+        app.state.alarm_repo = alarm_repo
         sensor_service = SensorService(repo=sensor_repo)
-        alarm_service = AlarmService(repo=AlarmRepository())
+        alarm_service = AlarmService(repo=alarm_repo)
 
         # ---------- MQTT 接入（sensor/data 等，见 settings.MQTT_SUBSCRIBE_TOPICS）----------
         def on_mqtt_message(topic: str, payload: str) -> None:

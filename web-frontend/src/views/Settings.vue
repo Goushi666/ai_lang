@@ -48,10 +48,16 @@ async function load() {
 }
 
 async function save() {
+  if (!config.value) return;
   saving.value = true;
   try {
-    await alarmApi.updateConfig(config.value);
+    await alarmApi.updateConfig({
+      temperature_threshold: Number(config.value.temperature_threshold),
+      humidity_threshold: Number(config.value.humidity_threshold),
+      light_threshold: Number(config.value.light_threshold),
+    });
     ElMessage.success("配置已保存");
+    await load();
   } catch {
     ElMessage.error("保存失败");
   } finally {

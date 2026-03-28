@@ -11,7 +11,7 @@
       </div>
     </el-header>
 
-    <el-container>
+    <el-container class="app-body">
       <!-- 左侧菜单栏 -->
       <el-aside width="200px" class="app-aside">
         <el-menu
@@ -24,10 +24,6 @@
           <el-menu-item index="/">
             <el-icon><Monitor /></el-icon>
             <span>环境监测</span>
-          </el-menu-item>
-          <el-menu-item index="/analysis">
-            <el-icon><DataLine /></el-icon>
-            <span>环境分析</span>
           </el-menu-item>
           <el-menu-item index="/agent">
             <el-icon><ChatDotRound /></el-icon>
@@ -53,7 +49,7 @@
       </el-aside>
 
       <!-- 主内容区 -->
-      <el-main class="app-main">
+      <el-main class="app-main" :class="{ 'app-main--dashboard': route.path === '/' }">
         <router-view />
       </el-main>
     </el-container>
@@ -63,7 +59,7 @@
 <script setup>
 import { computed, onMounted, onUnmounted, ref, provide } from "vue";
 import { useRoute } from "vue-router";
-import { Monitor, VideoCamera, Bell, Van, Setting, DataLine, ChatDotRound } from "@element-plus/icons-vue";
+import { Monitor, VideoCamera, Bell, Van, Setting, ChatDotRound } from "@element-plus/icons-vue";
 import WebSocketClient from "./utils/websocket.js";
 
 const route = useRoute();
@@ -107,6 +103,14 @@ html, body, #app {
 
 .app-layout {
   height: 100vh;
+  display: flex;
+  flex-direction: column;
+}
+
+.app-body {
+  flex: 1;
+  min-height: 0;
+  overflow: hidden;
 }
 
 .app-header {
@@ -155,5 +159,15 @@ html, body, #app {
   background-color: #f0f2f5;
   padding: 20px;
   overflow-y: auto;
+  flex: 1;
+  min-width: 0;
+  min-height: 0;
+}
+
+.app-main--dashboard {
+  overflow: hidden;
+  padding: 8px 10px;
+  display: flex;
+  flex-direction: column;
 }
 </style>
