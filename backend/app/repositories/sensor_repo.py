@@ -1,54 +1,69 @@
 from __future__ import annotations
 
-from dataclasses import dataclass
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 import random
 from typing import List, Optional
 
+from sqlalchemy import delete, select
+from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
+
+from app.models.sensor import SensorData
 from app.schemas.sensor import SensorDataResponse
 
 
-@dataclass
-class _SensorSnapshot:
-    device_id: str
-    temperature: float
-    humidity: float
-    light: float
-    timestamp: datetime
+def _to_naive_utc(dt: datetime) -> datetime:
+    if dt.tzinfo is None:
+        dt = dt.replace(tzinfo=timezone.utc)
+    else:
+        dt = dt.astimezone(timezone.utc)
+    return dt.replace(tzinfo=None)
+
+
+def _row_to_response(row: SensorData) -> SensorDataResponse:
+    ts = row.timestamp
+    if ts.tzinfo is None:
+        ts = ts.replace(tzinfo=timezone.utc)
+    else:
+        ts = ts.astimezone(timezone.utc)
+    return SensorDataResponse(
+        device_id=row.device_id,
+        temperature=row.temperature,
+        humidity=row.humidity,
+        light=row.light,
+        timestamp=ts,
+    )
 
 
 class SensorRepository:
     """
-    MVP 数据仓库：先用内存实现，保持 Service/接口不变，后续再替换 SQLite/MySQL。
+    传感器数据：SQLite（aiosqlite）持久化，与 REST / MQTT 共用同一 session_factory。
     """
 
-    def __init__(self) -> None:
-        self._data: List[_SensorSnapshot] = []
+    def __init__(self, session_factory: async_sessionmaker[AsyncSession]) -> None:
+        self._session_factory = session_factory
 
     async def get_latest(self) -> Optional[SensorDataResponse]:
-        if not self._data:
-            return None
-        latest = max(self._data, key=lambda x: x.timestamp)
-        return SensorDataResponse(**latest.__dict__)
+        async with self._session_factory() as session:
+            stmt = select(SensorData).order_by(SensorData.timestamp.desc()).limit(1)
+            result = await session.execute(stmt)
+            row = result.scalar_one_or_none()
+            if row is None:
+                return None
+            return _row_to_response(row)
 
     async def get_history(self, start_time: datetime, end_time: datetime) -> List[SensorDataResponse]:
-        if start_time.tzinfo is None:
-            start_time = start_time.replace(tzinfo=timezone.utc)
-        else:
-            start_time = start_time.astimezone(timezone.utc)
+        start_naive = _to_naive_utc(start_time)
+        end_naive = _to_naive_utc(end_time)
 
-        if end_time.tzinfo is None:
-            end_time = end_time.replace(tzinfo=timezone.utc)
-        else:
-            end_time = end_time.astimezone(timezone.utc)
-
-        rows = [
-            x
-            for x in self._data
-            if start_time <= x.timestamp <= end_time
-        ]
-        rows.sort(key=lambda x: x.timestamp)
-        return [SensorDataResponse(**x.__dict__) for x in rows]
+        async with self._session_factory() as session:
+            stmt = (
+                select(SensorData)
+                .where(SensorData.timestamp >= start_naive, SensorData.timestamp <= end_naive)
+                .order_by(SensorData.timestamp.asc())
+            )
+            result = await session.execute(stmt)
+            rows = result.scalars().all()
+            return [_row_to_response(r) for r in rows]
 
     async def export_csv(self, start_time: datetime, end_time: datetime) -> str:
         history = await self.get_history(start_time, end_time)
@@ -61,42 +76,38 @@ class SensorRepository:
 
     async def simulate_tick(self) -> Optional[SensorDataResponse]:
         """
-        MVP：模拟设备产生一条新采样，用于联调 WebSocket 实时推送链路。
-
-        无历史数据时不生成占位值，返回 None（由调用方跳过广播）。
+        基于库内最新一条做小幅扰动并插入；无数据时返回 None。
         """
-        if not self._data:
-            return None
+        async with self._session_factory() as session:
+            stmt = select(SensorData).order_by(SensorData.timestamp.desc()).limit(1)
+            result = await session.execute(stmt)
+            last = result.scalar_one_or_none()
+            if last is None:
+                return None
 
-        last = max(self._data, key=lambda x: x.timestamp)
-        ts = datetime.now(timezone.utc)
+            ts = datetime.now(timezone.utc)
+            ts_naive = _to_naive_utc(ts)
+            next_temp = round(last.temperature + random.uniform(-0.3, 0.3), 2)
+            next_hum = round(last.humidity + random.uniform(-0.5, 0.5), 2)
+            next_light = round(last.light + random.uniform(-20.0, 20.0), 2)
 
-        # 小幅扰动生成新值
-        next_temp = round(last.temperature + random.uniform(-0.3, 0.3), 2)
-        next_hum = round(last.humidity + random.uniform(-0.5, 0.5), 2)
-        next_light = round(last.light + random.uniform(-20.0, 20.0), 2)
-
-        self._data.append(
-            _SensorSnapshot(
+            row = SensorData(
                 device_id=last.device_id,
                 temperature=next_temp,
                 humidity=next_hum,
                 light=next_light,
+                timestamp=ts_naive,
+            )
+            session.add(row)
+            await session.commit()
+            await session.refresh(row)
+            return SensorDataResponse(
+                device_id=row.device_id,
+                temperature=row.temperature,
+                humidity=row.humidity,
+                light=row.light,
                 timestamp=ts,
             )
-        )
-
-        # 避免内存无限增长
-        if len(self._data) > 500:
-            self._data = self._data[-500:]
-
-        return SensorDataResponse(
-            device_id=last.device_id,
-            temperature=next_temp,
-            humidity=next_hum,
-            light=next_light,
-            timestamp=ts,
-        )
 
     async def ingest_reading(
         self,
@@ -106,29 +117,36 @@ class SensorRepository:
         light: float,
         timestamp: datetime,
     ) -> SensorDataResponse:
-        """写入一条来自 MQTT 等外部来源的传感器采样，供 REST latest/history 与 WebSocket 一致。"""
-        if timestamp.tzinfo is None:
-            timestamp = timestamp.replace(tzinfo=timezone.utc)
+        ts_aware = timestamp
+        if ts_aware.tzinfo is None:
+            ts_aware = ts_aware.replace(tzinfo=timezone.utc)
         else:
-            timestamp = timestamp.astimezone(timezone.utc)
+            ts_aware = ts_aware.astimezone(timezone.utc)
+        ts_naive = _to_naive_utc(ts_aware)
 
-        self._data.append(
-            _SensorSnapshot(
+        async with self._session_factory() as session:
+            row = SensorData(
                 device_id=device_id,
                 temperature=temperature,
                 humidity=humidity,
                 light=light,
-                timestamp=timestamp,
+                timestamp=ts_naive,
             )
-        )
-        if len(self._data) > 500:
-            self._data = self._data[-500:]
+            session.add(row)
+            await session.commit()
+            await session.refresh(row)
+            return SensorDataResponse(
+                device_id=row.device_id,
+                temperature=row.temperature,
+                humidity=row.humidity,
+                light=row.light,
+                timestamp=ts_aware,
+            )
 
-        return SensorDataResponse(
-            device_id=device_id,
-            temperature=temperature,
-            humidity=humidity,
-            light=light,
-            timestamp=timestamp,
-        )
-
+    async def delete_older_than(self, cutoff: datetime) -> int:
+        """删除严格早于 cutoff（UTC naive 存库）的记录，返回删除行数。"""
+        cutoff_naive = _to_naive_utc(cutoff)
+        async with self._session_factory() as session:
+            result = await session.execute(delete(SensorData).where(SensorData.timestamp < cutoff_naive))
+            await session.commit()
+        return result.rowcount or 0

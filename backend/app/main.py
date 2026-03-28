@@ -10,6 +10,8 @@
 
 import asyncio
 import logging
+from datetime import datetime, timedelta, timezone
+
 from fastapi import FastAPI, WebSocket
 from fastapi.middleware.cors import CORSMiddleware
 
@@ -26,6 +28,7 @@ from app.repositories.sensor_repo import SensorRepository
 from app.services.alarm_service import AlarmService
 from app.services.sensor_service import SensorService
 from app.core.config import settings
+from app.core.database import dispose_db, get_session_factory, init_db
 from app.core.mqtt import mqtt_client, parse_json_payload
 
 logger = logging.getLogger(__name__)
@@ -89,8 +92,10 @@ def create_app() -> FastAPI:
         MVP 阶段使用模拟数据驱动 WebSocket 推送链路，
         后续替换为真实 MQTT 设备数据接入。
         """
-        # 单一 SensorRepository 实例：MQTT 与 REST /api/sensors/latest 共用同一份内存数据
-        sensor_repo = SensorRepository()
+        await init_db()
+        session_factory = get_session_factory()
+        sensor_repo = SensorRepository(session_factory)
+        app.state.sensor_repo = sensor_repo
         sensor_service = SensorService(repo=sensor_repo)
         alarm_service = AlarmService(repo=AlarmRepository())
 
@@ -139,22 +144,41 @@ def create_app() -> FastAPI:
                     pass
                 await asyncio.sleep(20)
 
+        async def retention_loop() -> None:
+            while True:
+                await asyncio.sleep(3600)
+                try:
+                    days = settings.SENSOR_HISTORY_RETENTION_DAYS
+                    if days <= 0:
+                        continue
+                    cutoff = datetime.now(timezone.utc) - timedelta(days=days)
+                    n = await sensor_repo.delete_older_than(cutoff)
+                    if n:
+                        logger.info("传感器历史保留策略删除 %s 条（早于 %s）", n, cutoff.isoformat())
+                except Exception:
+                    logger.exception("传感器历史保留清理失败")
+
         # 将后台任务挂载到 app.state，方便关闭时取消
         if settings.MQTT_DISABLE_SENSOR_SIM:
             app.state._sensor_task = None
         else:
             app.state._sensor_task = asyncio.create_task(sensor_loop())
         app.state._alarm_task = asyncio.create_task(alarm_loop())
+        if settings.SENSOR_HISTORY_RETENTION_DAYS > 0:
+            app.state._retention_task = asyncio.create_task(retention_loop())
+        else:
+            app.state._retention_task = None
 
     @app.on_event("shutdown")
     async def _shutdown() -> None:
         """应用关闭时执行：取消所有后台定时任务。"""
-        for attr in ("_sensor_task", "_alarm_task"):
+        for attr in ("_sensor_task", "_alarm_task", "_retention_task"):
             task = getattr(app.state, attr, None)
             if task:
                 task.cancel()
         if settings.MQTT_ENABLED:
             await mqtt_client.stop()
+        await dispose_db()
 
     return app
 

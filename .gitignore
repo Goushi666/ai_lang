@@ -21,14 +21,24 @@ build/
 venv/
 env/
 *.log
+backend/app.db
+backend/app.db-*
+
 
 # Node / Frontend
 node_modules/
 web-frontend/dist/
 *.local
 
+
 # Testing
+ml_training
 .coverage
 htmlcov/
 .pytest_cache/
 .mypy_cache/
+
+# ML
+backend/trained_models/*.pth
+ml_training/data/
+ml_training/*.pth

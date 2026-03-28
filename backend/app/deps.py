@@ -7,11 +7,11 @@
 
 from typing import Optional
 
-from fastapi import Depends, Request
+from fastapi import Depends, HTTPException, Request
 
+from app.core.config import settings
 from app.core.security import get_optional_current_user
 from app.repositories.alarm_repo import AlarmRepository
-from app.repositories.sensor_repo import SensorRepository
 from app.repositories.vehicle_repo import VehicleRepository
 from app.services.agent_service import AgentService
 from app.services.alarm_service import AlarmService
@@ -20,9 +20,8 @@ from app.services.sensor_service import SensorService
 from app.services.vehicle_service import VehicleService
 
 
-def sensor_service_dep() -> SensorService:
-    # MVP：直接 new Repository（后续可替换成单例/连接池/DI 容器）
-    repo = SensorRepository()
+def sensor_service_dep(request: Request) -> SensorService:
+    repo = request.app.state.sensor_repo
     return SensorService(repo=repo)
 
 
@@ -38,8 +37,13 @@ def vehicle_service_dep() -> VehicleService:
     return VehicleService(repo=repo)
 
 
-def analysis_service_dep() -> AnalysisService:
-    return AnalysisService()
+def analysis_service_dep(request: Request) -> AnalysisService:
+    if not settings.ANALYSIS_ENABLED:
+        raise HTTPException(status_code=503, detail="环境分析已关闭")
+    return AnalysisService(
+        sensor_repo=request.app.state.sensor_repo,
+        alarm_service=AlarmService(repo=AlarmRepository()),
+    )
 
 
 def agent_service_dep() -> AgentService:

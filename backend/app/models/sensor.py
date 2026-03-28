@@ -1,26 +1,22 @@
 from datetime import datetime
 
-from sqlalchemy import Column, DateTime, Float, Integer, String
-from sqlalchemy.orm import declarative_base
+from sqlalchemy import DateTime, Float, Index, Integer, String
+from sqlalchemy.orm import Mapped, mapped_column
 
-
-Base = declarative_base()
+from app.core.database import Base
 
 
 class SensorData(Base):
     """
-    传感器数据表模型（SQLAlchemy ORM）。
-
-    注：MVP 阶段实际 Repository 使用内存实现，
-    该模型用于后续把数据层切换到 SQLite/MySQL 时复用。
+    传感器采样表：MQTT / 模拟写入，REST history/latest/export 与后续环境分析只读查询。
     """
 
     __tablename__ = "sensor_data"
+    __table_args__ = (Index("ix_sensor_data_device_timestamp", "device_id", "timestamp"),)
 
-    id = Column(Integer, primary_key=True, index=True)
-    device_id = Column(String(50), index=True)
-    temperature = Column(Float)
-    humidity = Column(Float)
-    light = Column(Float)
-    timestamp = Column(DateTime, default=datetime.utcnow, index=True)
-
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    device_id: Mapped[str] = mapped_column(String(50), index=True)
+    temperature: Mapped[float] = mapped_column(Float)
+    humidity: Mapped[float] = mapped_column(Float)
+    light: Mapped[float] = mapped_column(Float)
+    timestamp: Mapped[datetime] = mapped_column(DateTime, index=True)
