@@ -3,7 +3,7 @@
 
 负责创建 FastAPI 应用实例，完成以下初始化工作：
 - 注册 CORS 中间件
-- 挂载各业务 API 路由（传感器、告警、车辆、设备）
+- 挂载各业务 API 路由（传感器、告警、车辆、设备、环境分析、Agent）
 - 配置 WebSocket 端点用于实时数据推送
 - 启动后台任务（模拟传感器数据采集 & 告警生成）
 """
@@ -13,7 +13,9 @@ import logging
 from fastapi import FastAPI, WebSocket
 from fastapi.middleware.cors import CORSMiddleware
 
+from app.api.v1.agent import router as agent_router
 from app.api.v1.alarms import router as alarms_router
+from app.api.v1.analysis import router as analysis_router
 from app.api.v1.sensors import router as sensors_router
 from app.api.v1.vehicles import router as vehicles_router
 from app.api.v1.devices import router as devices_router
@@ -47,6 +49,8 @@ def create_app() -> FastAPI:
     app.include_router(alarms_router, prefix="/api/alarms", tags=["alarms"])      # 告警管理接口
     app.include_router(vehicles_router, prefix="/api/vehicle", tags=["vehicle"])   # 车辆控制接口
     app.include_router(devices_router, prefix="/api/devices", tags=["devices"])    # 设备管理接口
+    app.include_router(analysis_router, prefix="/api/analysis", tags=["analysis"])  # 环境分析（框架）
+    app.include_router(agent_router, prefix="/api/agent", tags=["agent"])          # 智能 Agent（框架）
 
     # ---------- 健康检查端点 ----------
     @app.get("/api/health")

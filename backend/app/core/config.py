@@ -49,6 +49,10 @@ class Settings(BaseSettings):
 
     MQTT_PORT: int = 1883
 
+    # 环境分析（框架阶段始终可调用；未来可扩展 ANALYSIS_ENABLED）
+    # 智能 Agent：关则 /api/agent/chat 返回 503
+    AGENT_ENABLED: bool = True
+
 
 settings = Settings()
 

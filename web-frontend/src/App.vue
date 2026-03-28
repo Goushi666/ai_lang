@@ -25,6 +25,14 @@
             <el-icon><Monitor /></el-icon>
             <span>环境监测</span>
           </el-menu-item>
+          <el-menu-item index="/analysis">
+            <el-icon><DataLine /></el-icon>
+            <span>环境分析</span>
+          </el-menu-item>
+          <el-menu-item index="/agent">
+            <el-icon><ChatDotRound /></el-icon>
+            <span>智能助手</span>
+          </el-menu-item>
           <el-menu-item index="/video">
             <el-icon><VideoCamera /></el-icon>
             <span>视频巡检</span>
@@ -55,7 +63,7 @@
 <script setup>
 import { computed, onMounted, onUnmounted, ref, provide } from "vue";
 import { useRoute } from "vue-router";
-import { Monitor, VideoCamera, Bell, Van, Setting } from "@element-plus/icons-vue";
+import { Monitor, VideoCamera, Bell, Van, Setting, DataLine, ChatDotRound } from "@element-plus/icons-vue";
 import WebSocketClient from "./utils/websocket.js";
 
 const route = useRoute();

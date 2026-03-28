@@ -13,7 +13,9 @@ from app.core.security import get_optional_current_user
 from app.repositories.alarm_repo import AlarmRepository
 from app.repositories.sensor_repo import SensorRepository
 from app.repositories.vehicle_repo import VehicleRepository
+from app.services.agent_service import AgentService
 from app.services.alarm_service import AlarmService
+from app.services.analysis_service import AnalysisService
 from app.services.sensor_service import SensorService
 from app.services.vehicle_service import VehicleService
 
@@ -34,6 +36,14 @@ def vehicle_service_dep() -> VehicleService:
     # MVP：车辆状态先用内存仓库
     repo = VehicleRepository()
     return VehicleService(repo=repo)
+
+
+def analysis_service_dep() -> AnalysisService:
+    return AnalysisService()
+
+
+def agent_service_dep() -> AgentService:
+    return AgentService()
 
 
 def optional_user_dep(request: Request) -> Optional[str]:
