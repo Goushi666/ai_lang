@@ -23,7 +23,8 @@
                 v-if="playMode === 'mjpeg'"
                 :src="mjpegAbsoluteUrl"
                 class="stream-mjpeg"
-                alt="MJPEG 视频流"
+                alt="车载摄像头 MJPEG"
+                @error="onMjpegImgError"
               />
               <el-empty
                 v-if="playMode === 'none'"
@@ -33,7 +34,10 @@
                 <template #image>
                   <el-icon :size="64" color="#c0c4cc"><VideoCamera /></el-icon>
                 </template>
-                <el-text type="info">{{ streamHint || "在 backend .env 设置 VIDEO_HLS_PLAYLIST_URL 或 VIDEO_MJPEG_URL 后刷新" }}</el-text>
+                <el-text type="info">{{
+                  streamHint ||
+                    "在 backend .env 设置 VIDEO_MJPEG_URL（如 http://192.168.137.114:8080/video_feed）或 VIDEO_HLS_PLAYLIST_URL 后刷新"
+                }}</el-text>
               </el-empty>
             </div>
             <div class="video-hints">
@@ -165,6 +169,7 @@ import { VideoCamera, Top, Bottom, Back, Right, VideoPause } from "@element-plus
 import Hls from "hls.js";
 import { vehicleApi } from "../api/vehicle";
 import { getVideoStreamConfig } from "../api/video";
+import { pickHlsPlaylistUrl, pickMjpegFeedUrl, toAbsoluteMediaUrl } from "../utils/videoStream";
 
 const ws = inject("ws");
 const status = ref(null);
@@ -176,13 +181,6 @@ const streamHint = ref("");
 const videoError = ref("");
 const mjpegAbsoluteUrl = ref("");
 let hlsInstance = null;
-
-function absoluteMediaUrl(u) {
-  if (!u) return "";
-  if (/^https?:\/\//i.test(u)) return u;
-  const origin = window.location.origin;
-  return u.startsWith("/") ? `${origin}${u}` : `${origin}/${u}`;
-}
 
 function destroyHls() {
   if (hlsInstance) {
@@ -197,7 +195,7 @@ async function setupHls(playlistUrl) {
   await nextTick();
   const el = videoEl.value;
   if (!el) return;
-  const src = absoluteMediaUrl(playlistUrl);
+  const src = toAbsoluteMediaUrl(playlistUrl);
   if (Hls.isSupported()) {
     hlsInstance = new Hls({ enableWorker: true });
     hlsInstance.loadSource(src);
@@ -218,6 +216,15 @@ async function setupHls(playlistUrl) {
   }
 }
 
+function onMjpegImgError() {
+  videoError.value =
+    "MJPEG 画面加载失败：请确认车端 video_stream 已启用，且 URL 可访问（如 /video_feed）；使用代理时请确认后端能访问 VIDEO_MJPEG_URL。";
+}
+
+/**
+ * 接收画面逻辑（文档）：GET stream-config → 有 HLS 则用 video+hls.js，否则用 <img> + MJPEG URL。
+ * MJPEG URL 优先 video_feed_url，再 mjpeg_url（含业务后端同源代理路径）。
+ */
 async function loadStreamConfig() {
   streamHint.value = "";
   videoError.value = "";
@@ -227,12 +234,14 @@ async function loadStreamConfig() {
   try {
     const cfg = await getVideoStreamConfig();
     streamHint.value = cfg.hint_zh || "";
-    if (cfg.hls_playlist_url) {
+    const hlsUrl = pickHlsPlaylistUrl(cfg);
+    const feedUrl = pickMjpegFeedUrl(cfg);
+    if (hlsUrl) {
       playMode.value = "hls";
-      await setupHls(cfg.hls_playlist_url);
-    } else if (cfg.mjpeg_url) {
+      await setupHls(hlsUrl);
+    } else if (feedUrl) {
       playMode.value = "mjpeg";
-      mjpegAbsoluteUrl.value = absoluteMediaUrl(cfg.mjpeg_url);
+      mjpegAbsoluteUrl.value = toAbsoluteMediaUrl(feedUrl);
     }
   } catch {
     streamHint.value = "无法拉取视频配置：请确认后端已启动且可访问 /api/video/stream-config";

@@ -5,7 +5,30 @@
 开发阶段通常允许跨域以便前端与后端端口不同。
 """
 
+from __future__ import annotations
+
+import json
+
 from app.core.config import settings
+
+
+def parse_cors_allow_origins(raw: str) -> list[str]:
+    """
+    将 .env 中的 CORS_ALLOW_ORIGINS 转为列表。
+    支持：*、逗号分隔、JSON 数组字符串（如 [\"http://localhost:5173\"]）。
+    """
+    s = (raw or "*").strip()
+    if not s or s == "*":
+        return ["*"]
+    if s.startswith("["):
+        try:
+            parsed = json.loads(s)
+        except json.JSONDecodeError:
+            return ["*"]
+        if isinstance(parsed, list):
+            return [str(x).strip() for x in parsed if str(x).strip()]
+        return ["*"]
+    return [p.strip() for p in s.split(",") if p.strip()]
 
 
 def cors_middleware() -> dict:
@@ -20,7 +43,7 @@ def cors_middleware() -> dict:
     因此：使用通配来源时，必须关闭 ``allow_credentials``；若需要携带 Cookie 等凭证，
     请改为显式列出前端 Origin（例如 ``http://localhost:5173``）。
     """
-    origins = list(settings.CORS_ALLOW_ORIGINS)
+    origins = parse_cors_allow_origins(settings.CORS_ALLOW_ORIGINS)
     wildcard_only = origins == ["*"] or origins == ["*", ""]
 
     # 通配 * 时不能带 credentials=True，否则浏览器/Starlette 对 WebSocket 会 403

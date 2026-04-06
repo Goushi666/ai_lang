@@ -22,6 +22,7 @@ from app.api.v1.monitoring import router as monitoring_router
 from app.api.v1.sensors import router as sensors_router
 from app.api.v1.vehicles import router as vehicles_router
 from app.api.v1.devices import router as devices_router
+from app.api.v1.video import router as video_router
 from app.middleware.cors import cors_middleware
 from app.websocket.manager import websocket_manager
 from app.repositories.alarm_repo import AlarmRepository
@@ -56,6 +57,7 @@ def create_app() -> FastAPI:
     app.include_router(analysis_router, prefix="/api/analysis", tags=["analysis"])  # 环境分析（框架）
     app.include_router(monitoring_router, prefix="/api/monitoring", tags=["monitoring"])  # 环境监测页
     app.include_router(agent_router, prefix="/api/agent", tags=["agent"])          # 智能 Agent（框架）
+    app.include_router(video_router, prefix="/api/video", tags=["video"])        # 车载 MJPEG / HLS 配置与代理
 
     # ---------- 健康检查端点 ----------
     @app.get("/api/health")
