@@ -16,7 +16,7 @@ from app.schemas.monitoring import (
     TimelinePoint,
 )
 from app.schemas.sensor import SensorDataResponse
-from app.services.analysis_service import _aware_utc, _linear_regression
+from app.services.temperature_forecast import aware_utc, linear_regression
 
 logger = logging.getLogger(__name__)
 
@@ -25,10 +25,10 @@ def extract_hourly_temps_before_anchor(
     sorted_points: List[SensorDataResponse], n_hours: int, anchor: datetime
 ) -> List[float]:
     """相对 anchor 时刻之前 n 个小时桶的均值温度（与 LSTM 训练口径一致）。"""
-    anchor = _aware_utc(anchor)
+    anchor = aware_utc(anchor)
     hourly: dict[int, List[float]] = defaultdict(list)
     for p in reversed(sorted_points):
-        ts = _aware_utc(p.timestamp)
+        ts = aware_utc(p.timestamp)
         if ts > anchor:
             continue
         hours_ago = (anchor - ts).total_seconds() / 3600.0
@@ -126,13 +126,13 @@ def _future_hour_temperatures(
 def build_two_hour_temperature_timeline(
     sorted_points: List[SensorDataResponse], now: datetime
 ) -> MonitoringTemperatureTimelineResponse:
-    now = _aware_utc(now)
+    now = aware_utc(now)
     window = settings.FORECAST_LSTM_WINDOW_HOURS
     t_from = now - timedelta(hours=1)
 
     past_actual: List[TimelinePoint] = []
     for p in sorted_points:
-        ts = _aware_utc(p.timestamp)
+        ts = aware_utc(p.timestamp)
         if t_from <= ts <= now:
             past_actual.append(
                 TimelinePoint(
@@ -193,7 +193,7 @@ def build_two_hour_temperature_timeline(
             xs = [z[0] for z in ap]
             ys = [z[1] for z in ap]
             t0 = xs[0]
-            a0, b0 = _linear_regression([x - t0 for x in xs], ys)
+            a0, b0 = linear_regression([x - t0 for x in xs], ys)
             past_predicted = [
                 TimelinePoint(
                     time_ms=g,

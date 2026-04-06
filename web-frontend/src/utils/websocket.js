@@ -59,6 +59,14 @@ class WebSocketClient {
     this.listeners.get(type).push(callback);
   }
 
+  /** 移除与 on 成对注册的处理函数，避免热更新或重复挂载导致同一告警多次弹窗 */
+  off(type, callback) {
+    const listeners = this.listeners.get(type);
+    if (!listeners) return;
+    const i = listeners.indexOf(callback);
+    if (i !== -1) listeners.splice(i, 1);
+  }
+
   send(data) {
     if (this.ws && this.ws.readyState === WebSocket.OPEN) {
       this.ws.send(JSON.stringify(data));

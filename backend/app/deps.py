@@ -20,8 +20,7 @@ from app.services.vehicle_service import VehicleService
 
 
 def sensor_service_dep(request: Request) -> SensorService:
-    repo = request.app.state.sensor_repo
-    return SensorService(repo=repo)
+    return request.app.state.sensor_service
 
 
 def alarm_service_dep(request: Request) -> AlarmService:

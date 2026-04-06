@@ -27,7 +27,7 @@ class VehicleStatusResponse(BaseModel):
 
 class VehicleControlRequest(BaseModel):
     """
-    车辆控制请求模型（由前端 VehicleControl.vue 提交）。
+    车辆控制请求模型（由前端 InspectionVehicle.vue 提交）。
 
     文档前端使用 action + speed + timestamp。
     """

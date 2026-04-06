@@ -29,17 +29,13 @@
             <el-icon><ChatDotRound /></el-icon>
             <span>智能助手</span>
           </el-menu-item>
-          <el-menu-item index="/video">
+          <el-menu-item index="/inspection">
             <el-icon><VideoCamera /></el-icon>
-            <span>视频巡检</span>
+            <span>巡检与遥控</span>
           </el-menu-item>
           <el-menu-item index="/alarms">
             <el-icon><Bell /></el-icon>
             <span>告警中心</span>
-          </el-menu-item>
-          <el-menu-item index="/vehicle">
-            <el-icon><Van /></el-icon>
-            <span>车辆控制</span>
           </el-menu-item>
           <el-menu-item index="/settings">
             <el-icon><Setting /></el-icon>
@@ -49,8 +45,14 @@
       </el-aside>
 
       <!-- 主内容区 -->
-      <el-main class="app-main" :class="{ 'app-main--dashboard': route.path === '/' }">
-        <router-view />
+      <el-main
+        class="app-main"
+        :class="{
+          'app-main--dashboard': route.path === '/',
+          'app-main--inspection': route.path === '/inspection',
+        }"
+      >
+        <router-view :class="{ 'app-main-route--fill': route.path === '/inspection' }" />
       </el-main>
     </el-container>
   </el-container>
@@ -59,8 +61,44 @@
 <script setup>
 import { computed, onMounted, onUnmounted, ref, provide } from "vue";
 import { useRoute } from "vue-router";
-import { Monitor, VideoCamera, Bell, Van, Setting, ChatDotRound } from "@element-plus/icons-vue";
+import { ElNotification } from "element-plus";
+import { Monitor, VideoCamera, Bell, Setting, ChatDotRound } from "@element-plus/icons-vue";
 import WebSocketClient from "./utils/websocket.js";
+
+function alarmLevelLabel(level) {
+  const map = { low: "低", medium: "中", high: "高", urgent: "紧急" };
+  return map[level] || level || "告警";
+}
+
+function alarmSeverity(level) {
+  const o = { urgent: 4, high: 3, medium: 2, low: 1 };
+  return o[level] ?? 2;
+}
+
+/** 后端同一次采样可合并多条告警（alarms 数组）；兼容旧版单条 payload */
+function normalizeAlarmPayloadList(payload) {
+  if (payload && Array.isArray(payload.alarms) && payload.alarms.length) return payload.alarms;
+  if (payload && payload.id != null) return [payload];
+  return [];
+}
+
+function showAlarmNotification(payload) {
+  const list = normalizeAlarmPayloadList(payload);
+  if (!list.length) return;
+  const worst = list.reduce(
+    (a, b) => (alarmSeverity(b.level) > alarmSeverity(a.level) ? b : a),
+    list[0],
+  );
+  const n = list.length;
+  const body = list.map((x) => x.message || "").filter(Boolean).join("\n");
+  const isBad = list.some((x) => x.level === "urgent" || x.level === "high");
+  ElNotification({
+    title: n > 1 ? `${alarmLevelLabel(worst.level)}级告警（${n} 条）` : `${alarmLevelLabel(worst.level)}级告警`,
+    message: body || worst.message || "",
+    type: isBad ? "error" : "warning",
+    duration: n > 1 ? 8000 : 6000,
+  });
+}
 
 const route = useRoute();
 const currentRoute = computed(() => route.path);
@@ -88,8 +126,14 @@ ws.connect = function () {
 provide("ws", ws);
 provide("wsConnected", wsConnected);
 
-onMounted(() => { ws.connect(); });
-onUnmounted(() => { ws.close(); });
+onMounted(() => {
+  ws.on("alarm", showAlarmNotification);
+  ws.connect();
+});
+onUnmounted(() => {
+  ws.off("alarm", showAlarmNotification);
+  ws.close();
+});
 </script>
 
 <style>
@@ -169,5 +213,22 @@ html, body, #app {
   padding: 8px 10px;
   display: flex;
   flex-direction: column;
+}
+
+.app-main--inspection {
+  overflow: hidden;
+  padding: 10px 12px;
+  display: flex;
+  flex-direction: column;
+}
+
+/* 巡检页根节点参与 flex 高度链，使主区域占满且不撑出滚动条 */
+.app-main--inspection .app-main-route--fill {
+  flex: 1;
+  min-height: 0;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
 }
 </style>

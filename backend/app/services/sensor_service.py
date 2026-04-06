@@ -1,9 +1,12 @@
 from datetime import datetime
-from typing import Any, List, Optional
+from typing import TYPE_CHECKING, Any, List, Optional
 
 from app.repositories.sensor_repo import SensorRepository
 from app.schemas.sensor import SensorDataResponse
 from app.websocket.manager import websocket_manager
+
+if TYPE_CHECKING:
+    from app.services.alarm_service import AlarmService
 
 
 class SensorService:
@@ -15,8 +18,9 @@ class SensorService:
     - 在 MVP 中产生模拟数据并通过 WebSocket 推送（push_sensor_data）
     """
 
-    def __init__(self, repo: SensorRepository) -> None:
+    def __init__(self, repo: SensorRepository, alarm_service: Optional["AlarmService"] = None) -> None:
         self._repo = repo
+        self._alarm_service = alarm_service
 
     async def get_latest(self) -> Optional[SensorDataResponse]:
         return await self._repo.get_latest()
@@ -41,21 +45,7 @@ class SensorService:
         data = await self._repo.simulate_tick()
         if data is None:
             return
-        ts_ms = int(data.timestamp.timestamp() * 1000)
-
-        await websocket_manager.broadcast(
-            {
-                "type": "sensor_data",
-                "payload": {
-                    "deviceId": data.device_id,
-                    "temperature": data.temperature,
-                    "humidity": data.humidity,
-                    "light": data.light,
-                    "timestamp": ts_ms,
-                },
-                "timestamp": ts_ms,
-            }
-        )
+        await self.broadcast_sensor_record(data)
 
     async def broadcast_sensor_record(self, data: SensorDataResponse) -> None:
         """将已持久化（内存）的采样按前端协议广播（与 push_sensor_data 的 WebSocket 结构一致）。"""
@@ -73,6 +63,8 @@ class SensorService:
                 "timestamp": ts_ms,
             }
         )
+        if self._alarm_service:
+            await self._alarm_service.evaluate_sensor_reading(data)
 
     async def ingest_mqtt_payload_dict(self, data: dict[str, Any]) -> Optional[SensorDataResponse]:
         """

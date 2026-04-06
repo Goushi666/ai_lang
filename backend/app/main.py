@@ -5,7 +5,7 @@
 - 注册 CORS 中间件
 - 挂载各业务 API 路由（传感器、告警、车辆、设备、环境分析、Agent）
 - 配置 WebSocket 端点用于实时数据推送
-- 启动后台任务（模拟传感器数据采集 & 告警生成）
+- 启动后台任务（模拟传感器数据采集；超阈告警由采样链路边沿触发）
 """
 
 import asyncio
@@ -100,8 +100,9 @@ def create_app() -> FastAPI:
         app.state.sensor_repo = sensor_repo
         alarm_repo = AlarmRepository()
         app.state.alarm_repo = alarm_repo
-        sensor_service = SensorService(repo=sensor_repo)
         alarm_service = AlarmService(repo=alarm_repo)
+        sensor_service = SensorService(repo=sensor_repo, alarm_service=alarm_service)
+        app.state.sensor_service = sensor_service
 
         # ---------- MQTT 接入（sensor/data 等，见 settings.MQTT_SUBSCRIBE_TOPICS）----------
         def on_mqtt_message(topic: str, payload: str) -> None:
@@ -139,15 +140,6 @@ def create_app() -> FastAPI:
                     pass
                 await asyncio.sleep(5)
 
-        async def alarm_loop() -> None:
-            """告警模拟循环：每 20 秒生成一条告警并广播给前端。"""
-            while True:
-                try:
-                    await alarm_service.push_alarm()
-                except Exception:
-                    pass
-                await asyncio.sleep(20)
-
         async def retention_loop() -> None:
             while True:
                 await asyncio.sleep(3600)
@@ -167,7 +159,6 @@ def create_app() -> FastAPI:
             app.state._sensor_task = None
         else:
             app.state._sensor_task = asyncio.create_task(sensor_loop())
-        app.state._alarm_task = asyncio.create_task(alarm_loop())
         if settings.SENSOR_HISTORY_RETENTION_DAYS > 0:
             app.state._retention_task = asyncio.create_task(retention_loop())
         else:
@@ -176,7 +167,7 @@ def create_app() -> FastAPI:
     @app.on_event("shutdown")
     async def _shutdown() -> None:
         """应用关闭时执行：取消所有后台定时任务。"""
-        for attr in ("_sensor_task", "_alarm_task", "_retention_task"):
+        for attr in ("_sensor_task", "_retention_task"):
             task = getattr(app.state, attr, None)
             if task:
                 task.cancel()

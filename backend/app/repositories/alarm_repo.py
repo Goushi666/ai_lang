@@ -1,9 +1,15 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
-from datetime import datetime, timedelta
-from typing import Dict, List
-import random
+from datetime import datetime, timezone
+from typing import Dict, List, Optional, Tuple
+
+
+def _to_utc_aware(dt: datetime) -> datetime:
+    """与 FastAPI Query 解析出的带时区时间可比；历史里 naive 一律视为 UTC。"""
+    if dt.tzinfo is None:
+        return dt.replace(tzinfo=timezone.utc)
+    return dt.astimezone(timezone.utc)
 
 from app.schemas.alarm import AlarmConfig, AlarmResponse
 
@@ -20,30 +26,30 @@ class _AlarmRow:
     timestamp: datetime
 
 
+def _level_for_excess(value: float, threshold: float) -> str:
+    """超阈越明显，级别越高（与前端 urgent/high/medium 一致）。"""
+    if threshold <= 0:
+        return "high"
+    delta = value - threshold
+    ratio = delta / threshold if threshold else 0.0
+    if delta >= 5 or ratio >= 0.15:
+        return "urgent"
+    if delta >= 2 or ratio >= 0.05:
+        return "high"
+    return "medium"
+
+
 class AlarmRepository:
     """
     告警数据仓库（MVP 内存实现）。
 
-    在接入真实硬件/MQTT 后，这里会：
-    - 从数据流中完成告警判定
-    - 把告警持久化到数据库
-    - 维护告警 read 状态
+    温度/湿度/光照告警仅在采样**从正常变为超阈**时写入一条（边沿触发），
+    避免持续超阈时重复刷屏；恢复至阈值以下后再次超阈会再次记录。
     """
+
     def __init__(self) -> None:
-        now = datetime.utcnow()
-        self._alarms: List[_AlarmRow] = [
-            _AlarmRow(
-                id=f"alarm_{i:03d}",
-                type="temperature",
-                level=["low", "medium", "high", "urgent"][i % 4],
-                message="MVP 模拟告警（温度相关）",
-                value=35.0 + i * 0.2,
-                threshold=30.0,
-                read=(i % 3 == 0),
-                timestamp=now - timedelta(minutes=20 * i),
-            )
-            for i in range(15)
-        ]
+        self._alarms: List[_AlarmRow] = []
+        self._metric_alarm_active: Dict[Tuple[str, str], bool] = {}
 
         self._config = AlarmConfig(
             temperature_threshold=30.0,
@@ -51,11 +57,17 @@ class AlarmRepository:
             light_threshold=350.0,
         )
 
-        self._config_store: Dict[str, AlarmConfig] = {"default": self._config}
+        self._config_store: dict[str, AlarmConfig] = {"default": self._config}
 
     async def get_history(self, start_time: datetime, end_time: datetime) -> List[AlarmResponse]:
-        rows = [a for a in self._alarms if start_time <= a.timestamp <= end_time]
-        rows.sort(key=lambda x: x.timestamp)
+        st = _to_utc_aware(start_time)
+        et = _to_utc_aware(end_time)
+        rows = [
+            a
+            for a in self._alarms
+            if st <= _to_utc_aware(a.timestamp) <= et
+        ]
+        rows.sort(key=lambda x: _to_utc_aware(x.timestamp))
         return [
             AlarmResponse(
                 id=r.id,
@@ -83,38 +95,54 @@ class AlarmRepository:
     async def update_config(self, config: AlarmConfig) -> None:
         self._config_store["default"] = config.model_copy(deep=True)
 
-    async def simulate_alarm_trigger(self) -> AlarmResponse:
+    def _next_id(self) -> str:
+        return f"alarm_{len(self._alarms):06d}"
+
+    async def try_append_threshold_alarm(
+        self,
+        *,
+        device_id: str,
+        metric: str,
+        metric_zh: str,
+        unit: str,
+        value: float,
+        threshold: float,
+    ) -> Optional[AlarmResponse]:
         """
-        MVP：模拟告警触发，用于联调 WebSocket 推送链路。
-
-        当前实现：
-        - 读取 `AlarmConfig.temperature_threshold` 作为阈值
-        - 根据阈值生成一个温度超阈值/临界告警
+        边沿检测：value > threshold 且上一状态为未告警时落库一条；降至阈值及以下时清除状态。
         """
-        config = self._config_store["default"]
-        ts = datetime.utcnow()
+        key = (device_id, metric)
+        over = value > threshold
+        was_active = self._metric_alarm_active.get(key, False)
 
-        # 用温度阈值生成一个“必触发”告警（也可扩展为多类型）
-        threshold = float(config.temperature_threshold)
-        value = round(threshold + random.uniform(0.5, 5.0), 2)
-        level = "high" if value > threshold else "medium"
+        if not over:
+            if was_active:
+                self._metric_alarm_active[key] = False
+            return None
 
-        next_index = len(self._alarms)
-        alarm_id = f"alarm_{next_index:03d}"
+        if was_active:
+            return None
 
+        self._metric_alarm_active[key] = True
+        ts = datetime.now(timezone.utc)
+        level = _level_for_excess(value, threshold)
+        alarm_id = self._next_id()
+        message = (
+            f"设备「{device_id}」{metric_zh}异常：当前 {value:.2f}{unit}，阈值 {threshold:.2f}{unit}"
+        )
         row = _AlarmRow(
             id=alarm_id,
-            type="temperature",
+            type=metric,
             level=level,
-            message="温度超过阈值（MVP 模拟）",
-            value=value,
-            threshold=threshold,
+            message=message,
+            value=round(float(value), 4),
+            threshold=round(float(threshold), 4),
             read=False,
             timestamp=ts,
         )
         self._alarms.append(row)
-        if len(self._alarms) > 500:
-            self._alarms = self._alarms[-500:]
+        if len(self._alarms) > 2000:
+            self._alarms = self._alarms[-2000:]
 
         return AlarmResponse(
             id=row.id,
@@ -126,4 +154,3 @@ class AlarmRepository:
             read=row.read,
             timestamp=row.timestamp,
         )
-
