@@ -28,7 +28,9 @@ from app.websocket.manager import websocket_manager
 from app.repositories.alarm_repo import AlarmRepository
 from app.repositories.sensor_repo import SensorRepository
 from app.services.alarm_service import AlarmService
+from app.repositories.vehicle_repo import VehicleRepository
 from app.services.sensor_service import SensorService
+from app.services.vehicle_service import VehicleService
 from app.core.config import settings
 from app.core.database import dispose_db, get_session_factory, init_db
 from app.core.mqtt import mqtt_client, parse_json_payload
@@ -105,6 +107,10 @@ def create_app() -> FastAPI:
         alarm_service = AlarmService(repo=alarm_repo)
         sensor_service = SensorService(repo=sensor_repo, alarm_service=alarm_service)
         app.state.sensor_service = sensor_service
+
+        vehicle_repo = VehicleRepository()
+        app.state.vehicle_repo = vehicle_repo
+        app.state.vehicle_service = VehicleService(repo=vehicle_repo)
 
         # ---------- MQTT 接入（sensor/data 等，见 settings.MQTT_SUBSCRIBE_TOPICS）----------
         def on_mqtt_message(topic: str, payload: str) -> None:

@@ -28,7 +28,11 @@ async def send_control(
     - speed：速度
     - timestamp：时间戳
     """
-    await service.send_control(action=payload.action, speed=payload.speed)
+    await service.send_control(
+        action=payload.action,
+        speed=payload.speed,
+        duration=payload.duration,
+    )
     return {"ok": True}
 
 

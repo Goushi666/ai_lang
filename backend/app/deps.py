@@ -11,7 +11,6 @@ from fastapi import Depends, HTTPException, Request
 
 from app.core.config import settings
 from app.core.security import get_optional_current_user
-from app.repositories.vehicle_repo import VehicleRepository
 from app.services.agent_service import AgentService
 from app.services.alarm_service import AlarmService
 from app.services.analysis_service import AnalysisService
@@ -28,10 +27,9 @@ def alarm_service_dep(request: Request) -> AlarmService:
     return AlarmService(repo=request.app.state.alarm_repo)
 
 
-def vehicle_service_dep() -> VehicleService:
-    # MVP：车辆状态先用内存仓库
-    repo = VehicleRepository()
-    return VehicleService(repo=repo)
+def vehicle_service_dep(request: Request) -> VehicleService:
+    # 与 lifespan 共用同一内存仓库，保证状态与 MQTT 发布一致
+    return request.app.state.vehicle_service
 
 
 def analysis_service_dep(request: Request) -> AnalysisService:

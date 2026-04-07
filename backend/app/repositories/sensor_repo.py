@@ -117,11 +117,15 @@ class SensorRepository:
     async def ingest_reading(
         self,
         device_id: str,
-        temperature: float,
-        humidity: float,
-        light: float,
+        temperature: float | None,
+        humidity: float | None,
+        light: float | None,
         timestamp: datetime,
     ) -> SensorDataResponse:
+        """
+        插入一条传感器记录。temperature/humidity/light 任一为 None 时，与同 device_id 的上一条合并，
+        用于 MQTT 分主题上报（如仅 dht、仅 light），避免未携带的字段被写成 0 覆盖。
+        """
         ts_aware = timestamp
         if ts_aware.tzinfo is None:
             ts_aware = ts_aware.replace(tzinfo=timezone.utc)
@@ -130,11 +134,35 @@ class SensorRepository:
         ts_naive = _to_naive_utc(ts_aware)
 
         async with self._session_factory() as session:
+            stmt = (
+                select(SensorData)
+                .where(SensorData.device_id == device_id)
+                .order_by(SensorData.timestamp.desc())
+                .limit(1)
+            )
+            result = await session.execute(stmt)
+            prev = result.scalar_one_or_none()
+
+            def _pick(new: float | None, old: float | None) -> float:
+                if new is not None:
+                    return new
+                if old is not None:
+                    return old
+                return 0.0
+
+            prev_temp = prev.temperature if prev else None
+            prev_hum = prev.humidity if prev else None
+            prev_light = prev.light if prev else None
+
+            final_temp = _pick(temperature, prev_temp)
+            final_hum = _pick(humidity, prev_hum)
+            final_light = _pick(light, prev_light)
+
             row = SensorData(
                 device_id=device_id,
-                temperature=temperature,
-                humidity=humidity,
-                light=light,
+                temperature=final_temp,
+                humidity=final_hum,
+                light=final_light,
                 timestamp=ts_naive,
             )
             session.add(row)

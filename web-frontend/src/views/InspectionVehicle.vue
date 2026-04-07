@@ -260,6 +260,7 @@ async function send(action) {
   await vehicleApi.sendControl({
     action,
     speed: speed.value,
+    duration: 0,
     timestamp: Date.now(),
   });
 }

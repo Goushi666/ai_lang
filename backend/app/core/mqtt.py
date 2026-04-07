@@ -92,6 +92,21 @@ def _float_or_default(value: Any, default: float = 0.0) -> float:
         return default
 
 
+def _optional_float_from_keys(data: dict[str, Any], *keys: str) -> float | None:
+    """
+    若 data 中未出现任一 keys，则返回 None（表示「本包未携带该量，应沿用上次采样」）。
+    若出现但无法解析为有限数值，同样视为未携带（None），避免把温湿度写成 0 覆盖真值。
+    """
+    for k in keys:
+        if k not in data:
+            continue
+        v = _float_or_default(data.get(k), default=float("nan"))
+        if v != v:  # NaN
+            return None
+        return v
+    return None
+
+
 def _parse_timestamp(value: Any) -> datetime:
     """支持毫秒/秒时间戳或缺省（使用当前 UTC）。"""
     if value is None:
@@ -120,8 +135,11 @@ def normalize_sensor_dict(data: dict[str, Any]) -> Optional[dict[str, Any]]:
     """
     将设备上报 JSON 转为内部统一结构。
 
+    分 topic 上报时（如 sensor/dht 与 sensor/light）各包可能只含部分字段；
+    未出现的字段用 None 表示，入库时与上一条同设备记录合并，避免缺省被写成 0 覆盖真值。
+
     Returns:
-        dict 包含 device_id, temperature, humidity, light, timestamp(datetime)；无法识别时返回 None。
+        dict 含 device_id, temperature/humidity/light（Optional[float]）, timestamp(datetime)；无法识别时返回 None。
     """
     if not isinstance(data, dict) or not data:
         return None
@@ -136,12 +154,9 @@ def normalize_sensor_dict(data: dict[str, Any]) -> Optional[dict[str, Any]]:
     if not isinstance(device_id, str):
         device_id = str(device_id)
 
-    temperature = _float_or_default(
-        data.get("temperature", data.get("temp", data.get("t"))),
-        default=float("nan"),
-    )
-    humidity = _float_or_default(data.get("humidity", data.get("hum", data.get("rh"))))
-    light = _float_or_default(data.get("light", data.get("lux", data.get("illumination"))))
+    temperature = _optional_float_from_keys(data, "temperature", "temp", "t")
+    humidity = _optional_float_from_keys(data, "humidity", "hum", "rh")
+    light = _optional_float_from_keys(data, "light", "lux", "illumination", "light_level")
 
     # 至少应有一个「像传感器」的字段，避免把无关 JSON 当传感器
     has_any = any(
@@ -156,13 +171,11 @@ def normalize_sensor_dict(data: dict[str, Any]) -> Optional[dict[str, Any]]:
             "light",
             "lux",
             "illumination",
+            "light_level",
         )
     )
     if not has_any:
         return None
-
-    if temperature != temperature:  # NaN
-        temperature = 0.0
 
     ts = _parse_timestamp(data.get("timestamp", data.get("ts", data.get("time"))))
 
@@ -252,9 +265,10 @@ class MqttClient:
             # paho 网络线程 -> 主线程：把业务回调投递到 asyncio 循环
             self._loop.call_soon_threadsafe(self._on_message, topic, payload)
 
-    async def publish(self, topic: str, payload: str) -> None:
+    async def publish(self, topic: str, payload: str, qos: int = 0) -> None:
+        """向 Broker 发布消息；小车控制等业务建议使用 qos=1（至少一次）。"""
         if self._client:
-            self._client.publish(topic, payload)
+            self._client.publish(topic, payload, qos=qos)
 
     async def stop(self) -> None:
         if self._client:

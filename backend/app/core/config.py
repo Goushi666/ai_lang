@@ -52,6 +52,8 @@ class Settings(BaseSettings):
     MQTT_SUBSCRIBE_TOPICS: str = "sensor/data"
     MQTT_DISABLE_SENSOR_SIM: bool = True
     MQTT_PORT: int = 1883
+    # Web → 树莓派小车控制（SmartCar 手册：car/control，QoS 1）；置空则只更新内存/WebSocket 不发 MQTT
+    MQTT_TOPIC_CAR_CONTROL: str = "car/control"
 
     # --- 环境分析（阈值与上限建议用 .env 按部署调整）---
     ANALYSIS_ENABLED: bool = True
