@@ -25,6 +25,16 @@ class VehicleStatusResponse(BaseModel):
     timestamp: datetime
 
 
+class GimbalControlRequest(BaseModel):
+    """
+    摄像头云台（MQTT `arm/control`）：仅使用关节 6、7，与手册 JSON 字段一致。
+    """
+
+    joint_6_angle: int = Field(ge=0, le=180, description="6 号关节目标角度")
+    joint_7_angle: int = Field(ge=0, le=90, description="7 号关节目标角度（超过 90° 易卡舵机）")
+    speed: int = Field(default=50, ge=0, le=100, description="转动速度 0~100")
+
+
 class VehicleControlRequest(BaseModel):
     """
     车辆控制请求模型（由前端 InspectionVehicle.vue 提交）。

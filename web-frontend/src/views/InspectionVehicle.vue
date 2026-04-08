@@ -2,10 +2,10 @@
   <div class="inspection-vehicle">
     <h2 class="page-title">巡检与遥控</h2>
 
-    <!-- 左 70% 仅视频；右 30% 纵向：上 50% = 运行状态+速度（各占一半），下 50% = 方向控制 -->
+    <!-- 左 70% 视频；右 30%：运行状态 + 速度与云台 + 方向控制 -->
     <div class="inspection-layout">
       <div class="layout-col layout-col--video">
-        <el-card shadow="hover" class="video-card">
+        <el-card shadow="never" class="video-card">
           <template #header>
             <span class="card-head">实时画面</span>
           </template>
@@ -24,6 +24,7 @@
                 :src="mjpegAbsoluteUrl"
                 class="stream-mjpeg"
                 alt="车载摄像头 MJPEG"
+                decoding="async"
                 @error="onMjpegImgError"
               />
               <el-empty
@@ -48,6 +49,7 @@
                   :closable="false"
                   show-icon
                   class="stream-hint"
+                  size="small"
                 >
                   {{ streamHint }}
                 </el-alert>
@@ -58,6 +60,7 @@
                   :closable="false"
                   show-icon
                   class="stream-hint"
+                  size="small"
                 />
                 <el-text v-if="playMode === 'none' && streamHint" type="warning" size="small" class="hints-fallback">
                   {{ streamHint }}
@@ -71,9 +74,15 @@
 
       <div class="layout-col layout-col--side">
         <div class="side-upper">
-          <el-card shadow="hover" class="status-card metric-card">
+          <el-card shadow="never" class="status-card compact-panel">
             <template #header><span class="card-head">运行状态</span></template>
-            <el-descriptions :column="1" border size="small" v-if="status">
+            <el-descriptions
+              v-if="status"
+              :column="1"
+              border
+              size="small"
+              class="status-desc"
+            >
               <el-descriptions-item label="连接状态">
                 <el-tag :type="status.connected ? 'success' : 'danger'" size="small">
                   {{ status.connected ? "已连接" : "未连接" }}
@@ -90,73 +99,103 @@
             </el-descriptions>
             <el-skeleton :rows="4" v-else animated />
           </el-card>
-
-          <el-card shadow="hover" class="speed-card metric-card">
-            <template #header><span class="card-head">速度设置</span></template>
-            <div class="speed-row">
-              <span class="speed-label">速度：{{ speed }}</span>
-              <el-slider v-model="speed" :min="0" :max="100" :step="5" show-stops />
-            </div>
-          </el-card>
         </div>
 
         <div class="side-lower">
-          <el-card shadow="hover" class="control-card">
-            <template #header>
-              <span class="card-head"
-                >方向控制 <el-text type="info" size="small">(键盘 W/A/S/D、空格停止)</el-text></span
-              >
-            </template>
+          <div class="side-lower-inner">
+            <el-card shadow="never" class="speed-gimbal-card compact-panel">
+              <template #header>
+                <div class="card-head-stack">
+                  <span class="card-head">速度与云台</span>
+                  <el-text type="info" size="small">云台三项拖动即下发 MQTT</el-text>
+                </div>
+              </template>
+              <div class="param-row">
+                <span class="param-row-label">行驶速度</span>
+                <div class="param-row-slider">
+                  <el-slider v-model="speed" :min="0" :max="100" :step="5" size="small" />
+                </div>
+                <span class="param-row-val">{{ speed }}</span>
+              </div>
+              <el-divider class="panel-divider" />
+              <div class="param-row">
+                <span class="param-row-label">关节 6</span>
+                <div class="param-row-slider">
+                  <el-slider v-model="gimbalJ6" :min="0" :max="180" :step="1" size="small" />
+                </div>
+                <span class="param-row-val">{{ gimbalJ6 }}°</span>
+              </div>
+              <div class="param-row">
+                <span class="param-row-label">关节 7</span>
+                <div class="param-row-slider">
+                  <el-slider v-model="gimbalJ7" :min="0" :max="90" :step="1" size="small" />
+                </div>
+                <span class="param-row-val">{{ gimbalJ7 }}°</span>
+              </div>
+              <div class="param-row">
+                <span class="param-row-label">云台转速</span>
+                <div class="param-row-slider">
+                  <el-slider v-model="gimbalSpeed" :min="0" :max="100" :step="5" size="small" />
+                </div>
+                <span class="param-row-val">{{ gimbalSpeed }}</span>
+              </div>
+            </el-card>
 
-            <div class="dpad">
-              <div class="dpad-row">
-                <div class="dpad-cell"></div>
-                <div class="dpad-cell">
-                  <el-button type="primary" class="dpad-btn" @click="send('forward')">
-                    <el-icon :size="18"><Top /></el-icon>
-                    <div class="dpad-label">前进</div>
-                  </el-button>
-                </div>
-                <div class="dpad-cell"></div>
-              </div>
-              <div class="dpad-row">
-                <div class="dpad-cell">
-                  <el-button type="primary" class="dpad-btn" @click="send('left')">
-                    <el-icon :size="18"><Back /></el-icon>
-                    <div class="dpad-label">左转</div>
-                  </el-button>
-                </div>
-                <div class="dpad-cell">
-                  <el-button type="warning" class="dpad-btn stop-btn" @click="send('stop')">
-                    <el-icon :size="18"><VideoPause /></el-icon>
-                    <div class="dpad-label">停止</div>
-                  </el-button>
-                </div>
-                <div class="dpad-cell">
-                  <el-button type="primary" class="dpad-btn" @click="send('right')">
-                    <el-icon :size="18"><Right /></el-icon>
-                    <div class="dpad-label">右转</div>
-                  </el-button>
-                </div>
-              </div>
-              <div class="dpad-row">
-                <div class="dpad-cell"></div>
-                <div class="dpad-cell">
-                  <el-button type="primary" class="dpad-btn" @click="send('backward')">
-                    <el-icon :size="18"><Bottom /></el-icon>
-                    <div class="dpad-label">后退</div>
-                  </el-button>
-                </div>
-                <div class="dpad-cell"></div>
-              </div>
-            </div>
+            <el-card shadow="never" class="control-card compact-panel">
+              <template #header>
+                <span class="card-head"
+                  >方向控制 <el-text type="info" size="small">(W/A/S/D、空格停)</el-text></span
+                >
+              </template>
 
-            <div class="emergency-row">
-              <el-button type="danger" class="emergency-btn" @click="send('stop')">
-                紧急停止
-              </el-button>
-            </div>
-          </el-card>
+              <div class="control-body">
+                <div class="dpad-center">
+                  <div class="dpad">
+                    <div class="dpad-row">
+                      <div class="dpad-cell"></div>
+                      <div class="dpad-cell">
+                        <el-button type="primary" class="dpad-btn" @click="send('forward')">
+                          <el-icon :size="20"><Top /></el-icon>
+                          <div class="dpad-label">前进</div>
+                        </el-button>
+                      </div>
+                      <div class="dpad-cell"></div>
+                    </div>
+                    <div class="dpad-row">
+                      <div class="dpad-cell">
+                        <el-button type="primary" class="dpad-btn" @click="send('left')">
+                          <el-icon :size="20"><Back /></el-icon>
+                          <div class="dpad-label">左转</div>
+                        </el-button>
+                      </div>
+                      <div class="dpad-cell">
+                        <el-button type="warning" class="dpad-btn stop-btn" @click="send('stop')">
+                          <el-icon :size="20"><VideoPause /></el-icon>
+                          <div class="dpad-label">停止</div>
+                        </el-button>
+                      </div>
+                      <div class="dpad-cell">
+                        <el-button type="primary" class="dpad-btn" @click="send('right')">
+                          <el-icon :size="20"><Right /></el-icon>
+                          <div class="dpad-label">右转</div>
+                        </el-button>
+                      </div>
+                    </div>
+                    <div class="dpad-row">
+                      <div class="dpad-cell"></div>
+                      <div class="dpad-cell">
+                        <el-button type="primary" class="dpad-btn" @click="send('backward')">
+                          <el-icon :size="20"><Bottom /></el-icon>
+                          <div class="dpad-label">后退</div>
+                        </el-button>
+                      </div>
+                      <div class="dpad-cell"></div>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </el-card>
+          </div>
         </div>
       </div>
     </div>
@@ -164,7 +203,8 @@
 </template>
 
 <script setup>
-import { inject, nextTick, onMounted, onUnmounted, ref } from "vue";
+import { inject, nextTick, onMounted, onUnmounted, ref, watch } from "vue";
+import { ElMessage } from "element-plus";
 import { VideoCamera, Top, Bottom, Back, Right, VideoPause } from "@element-plus/icons-vue";
 import Hls from "hls.js";
 import { vehicleApi } from "../api/vehicle";
@@ -174,6 +214,38 @@ import { pickHlsPlaylistUrl, pickMjpegFeedUrl, toAbsoluteMediaUrl } from "../uti
 const ws = inject("ws");
 const status = ref(null);
 const speed = ref(50);
+
+const gimbalJ6 = ref(90);
+const gimbalJ7 = ref(45);
+const gimbalSpeed = ref(50);
+
+const GIMBAL_DEBOUNCE_MS = 220;
+let gimbalMqttTimer = null;
+
+async function flushGimbalMqtt() {
+  try {
+    await vehicleApi.sendGimbal({
+      joint_6_angle: gimbalJ6.value,
+      joint_7_angle: gimbalJ7.value,
+      speed: gimbalSpeed.value,
+    });
+  } catch (e) {
+    const msg = e?.response?.data?.detail;
+    ElMessage.error(typeof msg === "string" ? msg : "云台下发失败，请确认 MQTT 已连接");
+  }
+}
+
+function scheduleGimbalMqtt() {
+  if (gimbalMqttTimer) clearTimeout(gimbalMqttTimer);
+  gimbalMqttTimer = setTimeout(() => {
+    gimbalMqttTimer = null;
+    flushGimbalMqtt();
+  }, GIMBAL_DEBOUNCE_MS);
+}
+
+watch([gimbalJ6, gimbalJ7, gimbalSpeed], () => {
+  scheduleGimbalMqtt();
+});
 
 const videoEl = ref(null);
 const playMode = ref("none");
@@ -293,6 +365,10 @@ onMounted(async () => {
 });
 
 onUnmounted(() => {
+  if (gimbalMqttTimer) {
+    clearTimeout(gimbalMqttTimer);
+    gimbalMqttTimer = null;
+  }
   window.removeEventListener("keydown", handleKeydown);
   destroyHls();
 });
@@ -318,6 +394,16 @@ onUnmounted(() => {
 .card-head {
   font-weight: 600;
   font-size: 13px;
+}
+.card-head-stack {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 2px;
+  line-height: 1.3;
+}
+.card-head-stack .card-head {
+  margin: 0;
 }
 
 /* 横向：左 70% 视频、右 30% 侧栏；侧栏纵向 50% / 50% */
@@ -349,12 +435,11 @@ onUnmounted(() => {
 }
 
 .side-upper {
-  flex: 1 1 0%;
-  min-height: 0;
+  flex: 0 0 auto;
   display: flex;
   flex-direction: column;
   gap: 8px;
-  overflow: hidden;
+  overflow: visible;
 }
 
 .side-lower {
@@ -365,8 +450,17 @@ onUnmounted(() => {
   flex-direction: column;
 }
 
+.side-lower-inner {
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
 .layout-col--video .video-card {
   border-radius: 6px;
+  border: 1px solid var(--el-border-color-lighter);
   flex: 1;
   min-height: 0;
   display: flex;
@@ -387,8 +481,8 @@ onUnmounted(() => {
 }
 
 .video-hints {
-  flex: 0 1 auto;
-  max-height: 32%;
+  flex: 0 0 auto;
+  max-height: min(120px, 22vh);
   min-height: 0;
   margin-top: 6px;
   padding-top: 4px;
@@ -419,6 +513,9 @@ onUnmounted(() => {
   display: flex;
   align-items: center;
   justify-content: center;
+  isolation: isolate;
+  transform: translateZ(0);
+  backface-visibility: hidden;
 }
 .stream-stage :deep(.el-empty) {
   padding: 12px 8px;
@@ -457,37 +554,94 @@ onUnmounted(() => {
 }
 .stream-mjpeg {
   display: block;
+  transform: translateZ(0);
+  backface-visibility: hidden;
 }
 
-.metric-card {
+.compact-panel {
   border-radius: 6px;
-  flex: 1;
-  min-height: 0;
-  display: flex;
-  flex-direction: column;
+  border: 1px solid var(--el-border-color-lighter);
 }
-.metric-card :deep(.el-card__header) {
-  padding: 6px 10px;
+.compact-panel :deep(.el-card__header) {
+  padding: 5px 10px;
   min-height: auto;
   flex-shrink: 0;
 }
-.metric-card :deep(.el-card__body) {
-  flex: 1;
-  min-height: 0;
-  overflow: auto;
+.compact-panel :deep(.el-card__body) {
   padding: 8px 10px;
+}
+
+.status-card {
+  flex: 0 0 auto;
+}
+.status-card :deep(.el-card__body) {
+  overflow: visible;
+  padding-top: 6px;
+  padding-bottom: 8px;
+}
+.status-desc :deep(.el-descriptions__body) {
+  background: transparent;
+}
+.status-desc :deep(.el-descriptions__label),
+.status-desc :deep(.el-descriptions__content) {
+  padding: 6px 10px !important;
+  font-size: 12px;
+}
+
+.speed-gimbal-card {
+  flex: 0 0 auto;
+}
+.speed-gimbal-card :deep(.el-card__body) {
+  display: flex;
+  flex-direction: column;
+  gap: 0;
+}
+.param-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 8px;
+}
+.param-row:last-of-type {
+  margin-bottom: 6px;
+}
+.param-row-label {
+  flex: 0 0 5.25rem;
+  font-size: 12px;
+  color: #606266;
+  line-height: 1.2;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.param-row-slider {
+  flex: 1 1 0;
+  min-width: 0;
+}
+.param-row-slider :deep(.el-slider) {
+  width: 100%;
+}
+.param-row-val {
+  flex: 0 0 2.25rem;
+  text-align: right;
+  font-size: 12px;
+  font-variant-numeric: tabular-nums;
+  color: #303133;
+  font-weight: 500;
+}
+.panel-divider {
+  margin: 4px 0 10px !important;
 }
 
 .control-card {
   border-radius: 6px;
-  flex: 1;
+  flex: 1 1 0;
   min-height: 0;
-  height: 100%;
   display: flex;
   flex-direction: column;
 }
 .control-card :deep(.el-card__header) {
-  padding: 6px 10px;
+  padding: 5px 10px;
   min-height: auto;
   flex-shrink: 0;
 }
@@ -496,21 +650,23 @@ onUnmounted(() => {
   min-height: 0;
   display: flex;
   flex-direction: column;
-  padding: 8px 10px;
-  overflow-y: auto;
+  padding: 8px 10px 10px;
+  overflow: hidden;
 }
 
-.speed-row {
+.control-body {
+  flex: 1;
+  min-height: 0;
   display: flex;
   flex-direction: column;
-  gap: 4px;
 }
-.speed-label {
-  font-size: 12px;
-  color: #606266;
-}
-.speed-card :deep(.el-slider) {
-  margin-top: 0;
+.dpad-center {
+  flex: 1 1 0;
+  min-height: 160px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 8px 4px;
 }
 
 .dpad {
@@ -518,26 +674,27 @@ onUnmounted(() => {
   flex-direction: column;
   align-items: center;
   justify-content: center;
-  gap: 4px;
-  padding: 4px 0 0;
-  flex: 1;
-  min-height: 0;
+  gap: 10px;
+  flex: 0 0 auto;
 }
 .dpad-row {
   display: flex;
-  gap: 6px;
+  gap: 12px;
+  align-items: center;
+  justify-content: center;
 }
 .layout-col--side .side-lower .dpad-cell {
-  width: 50px;
-  height: 50px;
+  width: 58px;
+  height: 58px;
+  flex-shrink: 0;
 }
 .layout-col--side .side-lower .dpad-btn {
-  width: 46px;
-  height: 46px;
+  width: 54px;
+  height: 54px;
 }
 .layout-col--side .side-lower .stop-btn {
-  width: 46px;
-  height: 46px;
+  width: 54px;
+  height: 54px;
 }
 
 .dpad-cell {
@@ -564,29 +721,8 @@ onUnmounted(() => {
 }
 .stop-btn {
   border-radius: 50%;
-  width: 52px;
-  height: 52px;
-}
-
-.emergency-row {
-  display: flex;
-  justify-content: center;
-  margin-top: 8px;
-  flex-shrink: 0;
-}
-.emergency-btn {
-  width: 140px;
-  height: 36px;
-  font-size: 14px;
-  font-weight: 600;
-  letter-spacing: 1px;
-  border-radius: 18px;
-}
-
-.layout-col--side .side-lower .emergency-btn {
-  width: min(100%, 160px);
-  height: 32px;
-  font-size: 13px;
+  width: 54px;
+  height: 54px;
 }
 
 /* 窄屏：纵向堆叠 */
@@ -611,7 +747,7 @@ onUnmounted(() => {
   }
 
   .video-hints {
-    max-height: 24vh;
+    max-height: min(100px, 20vh);
   }
 
   .side-upper,
@@ -620,12 +756,12 @@ onUnmounted(() => {
     min-height: 0;
   }
 
-  .metric-card {
-    flex: none;
+  .side-upper {
+    max-height: none;
   }
 
   .side-lower {
-    min-height: 220px;
+    min-height: 200px;
   }
 
   .layout-col--side .side-lower .dpad-cell {
@@ -639,11 +775,6 @@ onUnmounted(() => {
   .layout-col--side .side-lower .stop-btn {
     width: 52px;
     height: 52px;
-  }
-  .layout-col--side .side-lower .emergency-btn {
-    width: 140px;
-    height: 36px;
-    font-size: 14px;
   }
 }
 </style>

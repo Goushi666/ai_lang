@@ -16,6 +16,7 @@ class VehicleService:
 
     MVP：
     - send_control：写入（内存）控制结果 → 向 MQTT `car/control` 发布 JSON（与手册一致，QoS 1）→ 广播 `vehicle_status`
+    - send_gimbal_mqtt：向 `arm/control` 发布 joint 6、7（云台），QoS 1
     - get_status：读取当前车辆状态
     """
 
@@ -56,5 +57,22 @@ class VehicleService:
                 },
                 "timestamp": ts_ms,
             }
+        )
+
+    async def send_gimbal_mqtt(self, joint_6_angle: int, joint_7_angle: int, speed: int) -> None:
+        """手册 3.4：`{"joint","angle","speed"}`；云台仅下发 6、7 号关节各一条消息（QoS 1）。"""
+        arm_topic = (settings.MQTT_TOPIC_ARM_CONTROL or "").strip()
+        for joint, angle in ((6, joint_6_angle), (7, joint_7_angle)):
+            payload = json.dumps(
+                {"joint": joint, "angle": int(angle), "speed": int(speed)},
+                separators=(",", ":"),
+            )
+            await mqtt_client.publish(arm_topic, payload, qos=1)
+        logger.info(
+            "MQTT arm/control published joints 6,7 angles=%s,%s speed=%s topic=%s",
+            joint_6_angle,
+            joint_7_angle,
+            speed,
+            arm_topic,
         )
 
