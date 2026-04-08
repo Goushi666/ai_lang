@@ -2,7 +2,12 @@ from fastapi import APIRouter, Body, Depends, HTTPException
 
 from app.core.config import settings
 from app.deps import vehicle_service_dep
-from app.schemas.vehicle import GimbalControlRequest, VehicleControlRequest, VehicleStatusResponse
+from app.schemas.vehicle import (
+    ArmJointsControlRequest,
+    GimbalControlRequest,
+    VehicleControlRequest,
+    VehicleStatusResponse,
+)
 from app.services.vehicle_service import VehicleService
 
 
@@ -14,6 +19,7 @@ router = APIRouter()
 与 Web 端设计文档对齐：
 - `POST /api/vehicle/control`：发送控制指令
 - `POST /api/vehicle/gimbal`：摄像头云台（MQTT arm/control，joint 6/7）
+- `POST /api/vehicle/arm`：机械臂（MQTT arm/control，joint 0~5）
 - `GET /api/vehicle/status`：获取车辆实时状态
 """
 
@@ -36,6 +42,32 @@ async def send_gimbal(
         )
     except Exception:
         raise HTTPException(status_code=503, detail="云台 MQTT 下发失败") from None
+    return {"ok": True}
+
+
+@router.post("/arm")
+async def send_arm_joints(
+    payload: ArmJointsControlRequest = Body(...),
+    service: VehicleService = Depends(vehicle_service_dep),
+):
+    """向 MQTT `arm/control` 连续发布 joint 0~5 各一条（QoS 1，与 SmartCar 手册一致）。"""
+    if not settings.MQTT_ENABLED or not (settings.MQTT_TOPIC_ARM_CONTROL or "").strip():
+        raise HTTPException(
+            status_code=503,
+            detail="MQTT 未启用或未配置 MQTT_TOPIC_ARM_CONTROL，无法下发机械臂",
+        )
+    try:
+        await service.send_arm_joints_mqtt(
+            joint_0_angle=payload.joint_0_angle,
+            joint_1_angle=payload.joint_1_angle,
+            joint_2_angle=payload.joint_2_angle,
+            joint_3_angle=payload.joint_3_angle,
+            joint_4_angle=payload.joint_4_angle,
+            joint_5_angle=payload.joint_5_angle,
+            speed=payload.speed,
+        )
+    except Exception:
+        raise HTTPException(status_code=503, detail="机械臂 MQTT 下发失败") from None
     return {"ok": True}
 
 

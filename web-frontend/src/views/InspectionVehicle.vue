@@ -143,12 +143,25 @@
 
             <el-card shadow="never" class="control-card compact-panel">
               <template #header>
-                <span class="card-head"
-                  >方向控制 <el-text type="info" size="small">(W/A/S/D、空格停)</el-text></span
-                >
+                <div class="control-card-head">
+                  <div class="control-card-head-titles">
+                    <span class="card-head">遥控面板</span>
+                    <el-text type="info" size="small">
+                      {{
+                        controlPanelMode === "vehicle"
+                          ? "方向：W/A/S/D、空格停"
+                          : "机械臂：拖动即下发 MQTT（与云台同 topic）"
+                      }}
+                    </el-text>
+                  </div>
+                  <el-radio-group v-model="controlPanelMode" size="small" class="control-mode-toggle">
+                    <el-radio-button label="vehicle">方向</el-radio-button>
+                    <el-radio-button label="arm">机械臂</el-radio-button>
+                  </el-radio-group>
+                </div>
               </template>
 
-              <div class="control-body">
+              <div v-show="controlPanelMode === 'vehicle'" class="control-body">
                 <div class="dpad-center">
                   <div class="dpad">
                     <div class="dpad-row">
@@ -194,6 +207,36 @@
                   </div>
                 </div>
               </div>
+
+              <div v-show="controlPanelMode === 'arm'" class="control-body arm-control-body">
+                <div class="arm-sliders-scroll">
+                  <div
+                    v-for="i in 6"
+                    :key="'arm-j' + (i - 1)"
+                    class="param-row arm-param-row"
+                  >
+                    <span class="param-row-label arm-label">关节 {{ i - 1 }}</span>
+                    <div class="param-row-slider arm-slider-wrap">
+                      <el-slider
+                        :model-value="armAngles[i - 1]"
+                        :min="0"
+                        :max="180"
+                        :step="1"
+                        size="small"
+                        @update:model-value="(v) => setArmAngle(i - 1, v)"
+                      />
+                    </div>
+                    <span class="param-row-val arm-val">{{ armAngles[i - 1] }}°</span>
+                  </div>
+                  <div class="param-row arm-param-row">
+                    <span class="param-row-label arm-label">机械臂转速</span>
+                    <div class="param-row-slider arm-slider-wrap">
+                      <el-slider v-model="armSpeed" :min="0" :max="100" :step="5" size="small" />
+                    </div>
+                    <span class="param-row-val arm-val">{{ armSpeed }}</span>
+                  </div>
+                </div>
+              </div>
             </el-card>
           </div>
         </div>
@@ -216,11 +259,26 @@ const status = ref(null);
 const speed = ref(50);
 
 const gimbalJ6 = ref(90);
-const gimbalJ7 = ref(45);
+const gimbalJ7 = ref(60);
 const gimbalSpeed = ref(50);
+
+/** 方向控制 | 机械臂控制 */
+const controlPanelMode = ref("vehicle");
+
+const armAngles = ref([110, 160, 180, 180, 90, 90]);
+const armSpeed = ref(50);
+
+function setArmAngle(index, value) {
+  const next = armAngles.value.slice();
+  next[index] = value;
+  armAngles.value = next;
+}
 
 const GIMBAL_DEBOUNCE_MS = 220;
 let gimbalMqttTimer = null;
+
+const ARM_DEBOUNCE_MS = 220;
+let armMqttTimer = null;
 
 async function flushGimbalMqtt() {
   try {
@@ -245,6 +303,41 @@ function scheduleGimbalMqtt() {
 
 watch([gimbalJ6, gimbalJ7, gimbalSpeed], () => {
   scheduleGimbalMqtt();
+});
+
+async function flushArmMqtt() {
+  const a = armAngles.value;
+  try {
+    await vehicleApi.sendArmJoints({
+      joint_0_angle: a[0],
+      joint_1_angle: a[1],
+      joint_2_angle: a[2],
+      joint_3_angle: a[3],
+      joint_4_angle: a[4],
+      joint_5_angle: a[5],
+      speed: armSpeed.value,
+    });
+  } catch (e) {
+    const msg = e?.response?.data?.detail;
+    ElMessage.error(typeof msg === "string" ? msg : "机械臂下发失败，请确认 MQTT 已连接");
+  }
+}
+
+function scheduleArmMqtt() {
+  if (armMqttTimer) clearTimeout(armMqttTimer);
+  armMqttTimer = setTimeout(() => {
+    armMqttTimer = null;
+    flushArmMqtt();
+  }, ARM_DEBOUNCE_MS);
+}
+
+watch([armAngles, armSpeed], () => {
+  if (controlPanelMode.value !== "arm") return;
+  scheduleArmMqtt();
+}, { deep: true });
+
+watch(controlPanelMode, (mode) => {
+  if (mode === "arm") scheduleArmMqtt();
 });
 
 const videoEl = ref(null);
@@ -338,6 +431,7 @@ async function send(action) {
 }
 
 function handleKeydown(e) {
+  if (controlPanelMode.value !== "vehicle") return;
   const map = { w: "forward", s: "backward", a: "left", d: "right", " ": "stop" };
   const action = map[e.key.toLowerCase()];
   if (action) {
@@ -368,6 +462,10 @@ onUnmounted(() => {
   if (gimbalMqttTimer) {
     clearTimeout(gimbalMqttTimer);
     gimbalMqttTimer = null;
+  }
+  if (armMqttTimer) {
+    clearTimeout(armMqttTimer);
+    armMqttTimer = null;
   }
   window.removeEventListener("keydown", handleKeydown);
   destroyHls();
@@ -640,6 +738,27 @@ onUnmounted(() => {
   display: flex;
   flex-direction: column;
 }
+.control-card-head {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+.control-card-head-titles {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 2px;
+  min-width: 0;
+  line-height: 1.3;
+}
+.control-card-head-titles .card-head {
+  margin: 0;
+}
+.control-mode-toggle {
+  flex-shrink: 0;
+}
 .control-card :deep(.el-card__header) {
   padding: 5px 10px;
   min-height: auto;
@@ -723,6 +842,40 @@ onUnmounted(() => {
   border-radius: 50%;
   width: 54px;
   height: 54px;
+}
+
+.arm-control-body {
+  min-height: 160px;
+}
+.arm-sliders-scroll {
+  max-height: min(320px, 42vh);
+  overflow-y: auto;
+  padding-right: 2px;
+  display: flex;
+  flex-direction: column;
+  gap: 0;
+}
+.arm-param-row {
+  margin-bottom: 6px;
+}
+.arm-param-row:last-of-type {
+  margin-bottom: 4px;
+}
+.arm-label {
+  color: #722ed1;
+  font-weight: 500;
+}
+.arm-val {
+  color: #531dab;
+}
+.arm-slider-wrap :deep(.el-slider__runway) {
+  background-color: rgba(114, 46, 209, 0.12);
+}
+.arm-slider-wrap :deep(.el-slider__bar) {
+  background-color: #722ed1;
+}
+.arm-slider-wrap :deep(.el-slider__button) {
+  border-color: #722ed1;
 }
 
 /* 窄屏：纵向堆叠 */
