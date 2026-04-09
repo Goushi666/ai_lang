@@ -4,6 +4,10 @@
     <p class="page-hint">
       下列为数据库表 <code>environment_anomalies</code> 中的<strong>异常落库记录</strong>（按落库时间筛选）。
       超阈时已随实时告警自动落库；进入本页或点击「查询」拉取最新列表。删除将<strong>永久删除</strong>对应库记录。
+      <span class="page-hint-sub"
+        >落库时间：默认库内为 <strong>UTC</strong> 墙钟；若后端配置
+        <code>SQLITE_NAIVE_WALL_CLOCK_ZONE=Asia/Shanghai</code> 则为北京时间墙钟。本表始终按北京时间显示。</span
+      >
     </p>
 
     <el-card shadow="never" class="filter-card">
@@ -321,6 +325,14 @@ onMounted(() => {
   padding: 1px 4px;
   background: #f4f4f5;
   border-radius: 3px;
+}
+.page-hint-sub {
+  display: block;
+  margin-top: 6px;
+  color: #a8abb2;
+}
+.page-hint-sub code {
+  font-size: 11px;
 }
 
 .filter-card {

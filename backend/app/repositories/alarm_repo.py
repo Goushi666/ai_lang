@@ -26,6 +26,14 @@ class _AlarmRow:
     timestamp: datetime
 
 
+# 高报滞回：需回落到 threshold - hyst 以下才解除「已告警」态，避免在阈值附近抖动反复边沿落库
+_ALARM_CLEAR_HYSTERESIS: dict[str, float] = {
+    "temperature": 0.6,
+    "humidity": 2.0,
+    "light": 20.0,
+}
+
+
 def _level_for_excess(value: float, threshold: float) -> str:
     """超阈越明显，级别越高（与前端 urgent/high/medium 一致）。"""
     if threshold <= 0:
@@ -44,7 +52,7 @@ class AlarmRepository:
     告警数据仓库（MVP 内存实现）。
 
     温度/湿度/光照告警仅在采样**从正常变为超阈**时写入一条（边沿触发），
-    避免持续超阈时重复刷屏；恢复至阈值以下后再次超阈会再次记录。
+    持续超阈不重复刷屏；需回落到阈值减滞回量以下才解除告警态，再超阈才再次记录。
     """
 
     def __init__(self) -> None:
@@ -127,15 +135,20 @@ class AlarmRepository:
         threshold: float,
     ) -> Optional[AlarmResponse]:
         """
-        边沿检测：value > threshold 且上一状态为未告警时落库一条；降至阈值及以下时清除状态。
+        边沿检测：value > threshold 且上一状态为未告警时落库一条；
+        解除告警态需 value <= threshold - hyst，避免在阈值附近小幅波动反复触发。
         """
         key = (device_id, metric)
-        over = value > threshold
+        hyst = _ALARM_CLEAR_HYSTERESIS.get(metric, 0.0)
+        release = threshold - hyst
         was_active = self._metric_alarm_active.get(key, False)
 
-        if not over:
+        if value <= release:
             if was_active:
                 self._metric_alarm_active[key] = False
+            return None
+
+        if value <= threshold:
             return None
 
         if was_active:

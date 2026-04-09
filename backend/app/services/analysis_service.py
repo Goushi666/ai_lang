@@ -12,9 +12,10 @@ from itertools import groupby
 from typing import Any, List, Optional, Tuple
 
 from app.core.config import settings
-from app.core.timeutil import format_instant_rfc3339_utc_z
+from app.core.timeutil import format_instant_beijing_wall_csv, format_instant_rfc3339_utc_z
 
 logger = logging.getLogger(__name__)
+from app.repositories.environment_anomaly_repo import EnvironmentAnomalyRepository
 from app.repositories.sensor_repo import SensorRepository
 from app.schemas.alarm import AlarmConfig
 from app.schemas.analysis import (
@@ -361,9 +362,11 @@ class AnalysisService:
         *,
         sensor_repo: SensorRepository,
         alarm_service: AlarmService,
+        environment_anomaly_repo: Optional[EnvironmentAnomalyRepository] = None,
     ) -> None:
         self._sensor_repo = sensor_repo
         self._alarm_service = alarm_service
+        self._environment_anomaly_repo = environment_anomaly_repo
 
     async def get_environment_summary(
         self,
@@ -446,8 +449,9 @@ class AnalysisService:
         )
         forecast = compute_temperature_forecast(filtered_sorted)
 
-        # 不在此落库：本方法会被监测页 GET /anomalies 等频繁调用，若 persist 会导致每次切屏重复插入。
-        # environment_anomalies 仅由 AlarmService 超阈边沿写入（与弹窗同源）。
+        # 不在此持久化 environment_anomalies：本方法在「环境监测」等拉取分析时频繁调用，
+        # 连续超阈判定基于窗口内全量/抽样点，易与后台模拟采样或历史脏点形成伪 streak，每次进页误插入库。
+        # 库表仅由 AlarmService 实时边沿超阈（与 WebSocket 弹窗同源）写入。
 
         return EnvironmentSummaryResponse(
             device_id=out_device,
@@ -528,19 +532,19 @@ class AnalysisService:
     def build_full_series_csv(self, rows: List[SensorDataResponse]) -> str:
         buf = io.StringIO()
         w = csv.writer(buf)
-        w.writerow(["时间(ISO)", "设备编号", "温度℃", "湿度%RH", "光照lx"])
+        w.writerow(["时间(北京时间)", "设备编号", "温度℃", "湿度%RH", "光照lx"])
         for p in sorted(rows, key=lambda x: x.timestamp):
             ts = _aware_utc(p.timestamp)
             w.writerow(
                 [
-                    format_instant_rfc3339_utc_z(ts),
+                    format_instant_beijing_wall_csv(ts),
                     p.device_id,
                     p.temperature,
                     p.humidity,
                     p.light,
                 ]
             )
-        return buf.getvalue()
+        return "\ufeff" + buf.getvalue()
 
     def build_full_export_json(self, summary: EnvironmentSummaryResponse) -> str:
         def metric_block(m: AggregateMetric) -> dict[str, Any]:

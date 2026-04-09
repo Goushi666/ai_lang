@@ -939,6 +939,29 @@ function onResize() {
   requestAnimationFrame(resizeCharts);
 }
 
+/** 与 ws.on 成对注销；重复挂载时若旧回调对已 dispose 的图表 setOption 抛错，会打断后续 listener，页面不再刷新 */
+function onSensorWsPayload(payload) {
+  let ms = parseSensorPayloadTimestampMs(payload.timestamp);
+  if (Number.isNaN(ms)) ms = Date.now();
+
+  latest.value = {
+    device_id: payload.deviceId || payload.device_id || "—",
+    temperature: payload.temperature,
+    humidity: payload.humidity,
+    light: payload.light,
+    timestamp: ms,
+  };
+
+  appendRealtimeTriplet(ms, payload.temperature, payload.humidity, payload.light);
+
+  pruneOld(tempRealtime);
+  pruneOld(humRealtime);
+  pruneOld(lightRealtime);
+  maybeThinBuffers();
+
+  scheduleRealtimeCharts();
+}
+
 onMounted(async () => {
   await fetchLatest();
   await nextTick();
@@ -948,41 +971,21 @@ onMounted(async () => {
   await nextTick();
   requestAnimationFrame(resizeCharts);
 
-  // 预测线 30s 刷新（从 DB），异常 30s 刷新
+  // 预测线 30s 刷新（从 DB）；异常/阈值 30s；最新采样 REST 兜底（避免仅依赖 WS 时断更）
   pollTimer = setInterval(() => {
     refreshPrediction();
     fetchAnomalies();
     fetchAlarmConfig();
+    fetchLatest();
   }, 30000);
 
-  // WebSocket 实时推送：更新指标卡片 + 追加曲线数据点
-  ws.on("sensor_data", (payload) => {
-    let ms = parseSensorPayloadTimestampMs(payload.timestamp);
-    if (Number.isNaN(ms)) ms = Date.now();
-
-    latest.value = {
-      device_id: payload.deviceId || payload.device_id || "—",
-      temperature: payload.temperature,
-      humidity: payload.humidity,
-      light: payload.light,
-      timestamp: ms,
-    };
-
-    appendRealtimeTriplet(ms, payload.temperature, payload.humidity, payload.light);
-
-    // 裁剪超过 2 小时的旧数据
-    pruneOld(tempRealtime);
-    pruneOld(humRealtime);
-    pruneOld(lightRealtime);
-    maybeThinBuffers();
-
-    scheduleRealtimeCharts();
-  });
+  ws.on("sensor_data", onSensorWsPayload);
 
   window.addEventListener("resize", onResize);
 });
 
 onUnmounted(() => {
+  ws.off("sensor_data", onSensorWsPayload);
   if (chartUpdateRaf) {
     cancelAnimationFrame(chartUpdateRaf);
     chartUpdateRaf = 0;
@@ -991,6 +994,8 @@ onUnmounted(() => {
   window.removeEventListener("resize", onResize);
   tempChart?.dispose();
   humChart?.dispose();
+  tempChart = null;
+  humChart = null;
 });
 </script>
 

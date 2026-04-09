@@ -115,8 +115,8 @@ def _parse_timestamp(value: Any) -> datetime:
     **Unix 数值（秒/毫秒）**：惯例为自 1970-01-01 **UTC** 起的 POSIX epoch，与设备所在时区无关；
     使用 ``datetime.fromtimestamp(..., tz=timezone.utc)`` 解读。**不要**在设备端对秒级 timestamp 再加 28800。
 
-    **无时区 ISO 字符串**：按 ``MQTT_NAIVE_ISO_TIMEZONE``（默认 Asia/Shanghai）当作墙钟再转 UTC；
-    若设备发的是 UTC 无时区串请设 ``MQTT_NAIVE_ISO_TIMEZONE=UTC``。
+    **无时区 ISO 字符串**：按 ``MQTT_NAIVE_ISO_TIMEZONE``（默认 UTC）当作墙钟再转 UTC 存库。
+    若设备发的是东八区本地墙钟无时区串，请在 .env 设 ``MQTT_NAIVE_ISO_TIMEZONE=Asia/Shanghai``。
 
     - ``bool`` 是 ``int`` 子类，须先排除，避免 True/False 被当成时间戳。
     - 小于 1e12 的数值按**秒**解析（10 位 Unix 秒等）。
@@ -206,6 +206,25 @@ def normalize_sensor_dict(data: dict[str, Any]) -> Optional[dict[str, Any]]:
         "light": light,
         "timestamp": ts,
     }
+
+
+def mqtt_payload_present_metrics(data: dict[str, Any]) -> frozenset[str]:
+    """
+    根据原始 JSON 键判断「本包显式携带」的指标（与 normalize 的别名一致）。
+
+    告警边沿仅应对本包出现的维度做判定：DHT 包不要拿合并行里的旧光照/旧温湿度去误触发
+    （例如光照一直 359、温度在阈值旁抖动）。
+    """
+    if not isinstance(data, dict) or not data:
+        return frozenset()
+    present: set[str] = set()
+    if any(k in data for k in ("temperature", "temp", "t")):
+        present.add("temperature")
+    if any(k in data for k in ("humidity", "hum", "rh")):
+        present.add("humidity")
+    if any(k in data for k in ("light", "lux", "illumination", "light_level")):
+        present.add("light")
+    return frozenset(present)
 
 
 class MqttClient:

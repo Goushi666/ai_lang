@@ -8,7 +8,7 @@ from sqlalchemy import delete, select
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
 from app.core.timeutil import (
-    format_instant_rfc3339_utc_z,
+    format_instant_beijing_wall_csv,
     instant_to_sqlite_naive,
     to_utc_aware_instant,
     utc_aware_from_db_naive,
@@ -82,13 +82,14 @@ class SensorRepository:
 
     async def export_csv(self, start_time: datetime, end_time: datetime) -> str:
         history = await self.get_history(start_time, end_time)
-        lines = ["timestamp,device_id,temperature,humidity,light"]
+        # 与告警中心导出一致：北京时间墙钟，避免 CSV 用 UTC-Z 与界面/Excel 对比时差 8 小时
+        lines = ["时间(北京时间),device_id,temperature,humidity,light"]
         for row in history:
             lines.append(
-                f"{format_instant_rfc3339_utc_z(row.timestamp)},"
+                f"{format_instant_beijing_wall_csv(row.timestamp)},"
                 f"{row.device_id},{row.temperature},{row.humidity},{row.light}"
             )
-        return "\n".join(lines)
+        return "\ufeff" + "\n".join(lines)
 
     async def simulate_tick(self) -> Optional[SensorDataResponse]:
         """
@@ -101,7 +102,7 @@ class SensorRepository:
             last = result.scalar_one_or_none()
 
             ts_utc = datetime.now(timezone.utc).replace(microsecond=0)
-            ts_naive = ts_utc.replace(tzinfo=None)
+            ts_naive = instant_to_sqlite_naive(ts_utc)
 
             if last is None:
                 # 无历史数据时插入种子记录
@@ -150,7 +151,7 @@ class SensorRepository:
         **光照**若本包未携带则**不**沿用上一秒（记 0），避免 light 独立 topic 时旧值被复制到每一秒导致峰值/曲线失真。
         """
         ts_aware = to_utc_aware_instant(timestamp).replace(microsecond=0)
-        ts_naive = ts_aware.replace(tzinfo=None)
+        ts_naive = instant_to_sqlite_naive(ts_aware)
 
         async with self._session_factory() as session:
             same = await _same_second_row_or_none(session, device_id, ts_naive)

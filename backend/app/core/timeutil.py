@@ -8,6 +8,17 @@ from zoneinfo import ZoneInfo
 from app.core.config import settings
 
 
+def _sqlite_naive_wall_zoneinfo() -> ZoneInfo | None:
+    """
+    若配置 ``SQLITE_NAIVE_WALL_CLOCK_ZONE``（如 Asia/Shanghai），则 naive 列按该时区墙钟存取；
+    空或 UTC 则列内存 UTC 墙钟（默认）。
+    """
+    name = (settings.SQLITE_NAIVE_WALL_CLOCK_ZONE or "").strip()
+    if not name or name.upper() == "UTC":
+        return None
+    return ZoneInfo(name)
+
+
 def _naive_wall_means_tzname() -> str | None:
     """
     仅用于 **读库** ``utc_aware_from_db_naive``：历史误把东八区墙钟写入 naive 列时填 Asia/Shanghai。
@@ -34,15 +45,20 @@ def to_utc_aware_instant(dt: datetime) -> datetime:
 
 def instant_to_sqlite_naive(dt: datetime) -> datetime:
     """
-    写入 SQLite ``DateTime`` 列：**UTC 墙钟的 naive**。
+    写入 SQLite ``DateTime`` 列的无时区值。
 
-    仅依赖 ``to_utc_aware_instant``（naive=UTC 墙钟）。``SQLITE_NAIVE_MEANS_TIMEZONE`` 只影响 **读出**，不参与本条。
+    - 默认（未配 ``SQLITE_NAIVE_WALL_CLOCK_ZONE``）：**UTC 墙钟** naive。
+    - 若配 ``Asia/Shanghai``：**北京时间墙钟** naive（与 Navicat 本地观感一致；API 仍通过 ``utc_aware_from_db_naive`` 换算为 UTC）。
     """
-    return to_utc_aware_instant(dt).replace(tzinfo=None)
+    aware = to_utc_aware_instant(dt)
+    zi = _sqlite_naive_wall_zoneinfo()
+    if zi is None:
+        return aware.replace(tzinfo=None)
+    return aware.astimezone(zi).replace(tzinfo=None)
 
 
 def iso_string_to_sqlite_naive(iso_str: str) -> datetime:
-    """ISO / RFC3339 字符串（含 ``Z``/``z``、``±offset``）→ 存库用 UTC naive。"""
+    """ISO / RFC3339 字符串（含 ``Z``/``z``、``±offset``）→ 存库用 naive（按 ``SQLITE_NAIVE_WALL_CLOCK_ZONE``）。"""
     s = (iso_str or "").strip()
     if not s:
         raise ValueError("empty ISO datetime string")
@@ -54,13 +70,16 @@ def iso_string_to_sqlite_naive(iso_str: str) -> datetime:
 
 def utc_aware_from_db_naive(ts: datetime) -> datetime:
     """
-    SQLite 中存的无时区时间戳：默认按 **UTC 墙钟** 理解（与当前入库逻辑一致）。
+    将 SQLite naive 列还原为 UTC aware。
 
-    若历史数据实为「东八区墙钟误写入 naive」，在 .env 设置
-    ``SQLITE_NAIVE_MEANS_TIMEZONE=Asia/Shanghai``，读出时会先按该时区再换算为 UTC。
+    优先 ``SQLITE_NAIVE_WALL_CLOCK_ZONE``（与写入一致）；未配置时默认列内为 UTC 墙钟；
+    若仅做历史误存修复可再设 ``SQLITE_NAIVE_MEANS_TIMEZONE``（与 WALL_CLOCK 二选一即可，勿混两套语义）。
     """
     if ts.tzinfo is not None:
         return ts.astimezone(timezone.utc)
+    zi = _sqlite_naive_wall_zoneinfo()
+    if zi is not None:
+        return ts.replace(tzinfo=zi).astimezone(timezone.utc)
     tzname = _naive_wall_means_tzname()
     if tzname is None:
         return ts.replace(tzinfo=timezone.utc)
@@ -68,13 +87,28 @@ def utc_aware_from_db_naive(ts: datetime) -> datetime:
 
 
 def attach_tz_for_mqtt_naive_iso(dt: datetime) -> datetime:
-    """MQTT JSON 里无时区的 ISO 本地时间：按 ``MQTT_NAIVE_ISO_TIMEZONE`` 当作墙钟再转 UTC。"""
+    """MQTT JSON 里无时区的 ISO：按 ``MQTT_NAIVE_ISO_TIMEZONE``（默认 UTC）当作墙钟再换算为 UTC。"""
     if dt.tzinfo is not None:
         return dt.astimezone(timezone.utc)
-    tzname = (settings.MQTT_NAIVE_ISO_TIMEZONE or "Asia/Shanghai").strip()
+    tzname = (settings.MQTT_NAIVE_ISO_TIMEZONE or "UTC").strip()
     if not tzname or tzname.upper() == "UTC":
         return dt.replace(tzinfo=timezone.utc)
     return dt.replace(tzinfo=ZoneInfo(tzname)).astimezone(timezone.utc)
+
+
+def format_instant_beijing_wall_csv(dt: datetime) -> str:
+    """
+    北京时间墙钟 ``YYYY-MM-DD HH:mm:ss``（无时区后缀）。
+
+    用于传感器等 CSV 导出，与告警中心前端 ``formatDateTimeZh`` 观感一致。
+    REST / WebSocket 仍应使用 ``format_instant_rfc3339_utc_z`` 表示 UTC 瞬间。
+    """
+    if dt.tzinfo is None:
+        aware = utc_aware_from_db_naive(dt)
+    else:
+        aware = dt.astimezone(timezone.utc)
+    sh = aware.astimezone(ZoneInfo("Asia/Shanghai"))
+    return sh.strftime("%Y-%m-%d %H:%M:%S")
 
 
 def format_instant_rfc3339_utc_z(dt: datetime) -> str:

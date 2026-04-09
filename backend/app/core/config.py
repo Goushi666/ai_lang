@@ -42,8 +42,12 @@ class Settings(BaseSettings):
     )
     # naive 列含义：空/UTC=按 UTC；Asia/Shanghai=按东八区墙钟再换算（修历史误存）
     SQLITE_NAIVE_MEANS_TIMEZONE: str = ""
-    # MQTT 无时区 ISO 字符串按何墙钟理解；UTC=严格格林威治；国内设备常发本地无时区串用 Asia/Shanghai
-    MQTT_NAIVE_ISO_TIMEZONE: str = "Asia/Shanghai"
+    # SQLite DateTime 无时区列按何「墙钟」存取：空/UTC=存 UTC 墙钟（推荐，与 ISO Z 一致）；
+    # Asia/Shanghai=存北京时间墙钟，Navicat 直读与界面一致；切换后旧 UTC 数据会被误读，需自行迁移或清空。
+    SQLITE_NAIVE_WALL_CLOCK_ZONE: str = ""
+    # MQTT 无时区 ISO 按何墙钟理解再转 UTC 存库。默认 UTC：多数设备/云模板发的是「已是 UTC 的无时区串」，
+    # 若默认上海会把整段时刻再减 8 小时，库内看起来比北京时间慢 8 小时。仅当设备明确发东八区墙钟无时区串时改为 Asia/Shanghai。
+    MQTT_NAIVE_ISO_TIMEZONE: str = "UTC"
 
     # --- 百度智能云 IoT Core MQTT（账号/主题等均在 .env）---
     MQTT_IOT_CORE_ID: str = ""

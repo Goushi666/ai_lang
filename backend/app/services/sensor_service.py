@@ -1,5 +1,5 @@
 from datetime import datetime, timezone
-from typing import TYPE_CHECKING, Any, List, Optional
+from typing import TYPE_CHECKING, Any, FrozenSet, List, Optional
 
 from app.core.timeutil import utc_aware_from_db_naive
 from app.repositories.sensor_repo import SensorRepository
@@ -55,9 +55,14 @@ class SensorService:
         data = await self._repo.simulate_tick()
         if data is None:
             return
-        await self.broadcast_sensor_record(data)
+        await self.broadcast_sensor_record(data, metrics_to_evaluate=None)
 
-    async def broadcast_sensor_record(self, data: SensorDataResponse) -> None:
+    async def broadcast_sensor_record(
+        self,
+        data: SensorDataResponse,
+        *,
+        metrics_to_evaluate: Optional[FrozenSet[str]] = None,
+    ) -> None:
         """将已持久化（内存）的采样按前端协议广播（与 push_sensor_data 的 WebSocket 结构一致）。"""
         ts_ms = _utc_epoch_ms_from_instant(data.timestamp)
         await websocket_manager.broadcast(
@@ -74,7 +79,9 @@ class SensorService:
             }
         )
         if self._alarm_service:
-            await self._alarm_service.evaluate_sensor_reading(data)
+            await self._alarm_service.evaluate_sensor_reading(
+                data, metrics_to_evaluate=metrics_to_evaluate
+            )
 
     async def ingest_mqtt_payload_dict(self, data: dict[str, Any]) -> Optional[SensorDataResponse]:
         """
@@ -82,7 +89,7 @@ class SensorService:
 
         字段兼容常见别名：deviceId/device_id/deviceName、temp、temperature、hum、humidity、lux、light 等。
         """
-        from app.core.mqtt import normalize_sensor_dict
+        from app.core.mqtt import mqtt_payload_present_metrics, normalize_sensor_dict
 
         normalized = normalize_sensor_dict(data)
         if not normalized:
@@ -95,6 +102,10 @@ class SensorService:
             light=normalized["light"],
             timestamp=normalized["timestamp"],
         )
-        await self.broadcast_sensor_record(rec)
+        present = mqtt_payload_present_metrics(data)
+        await self.broadcast_sensor_record(
+            rec,
+            metrics_to_evaluate=present if present else None,
+        )
         return rec
 

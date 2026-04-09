@@ -1,6 +1,6 @@
 import logging
 from datetime import datetime
-from typing import List, Optional
+from typing import FrozenSet, List, Optional
 
 from app.core.timeutil import format_instant_rfc3339_utc_z, to_utc_aware_instant
 from app.repositories.alarm_repo import AlarmRepository
@@ -67,8 +67,18 @@ class AlarmService:
     async def update_config(self, config: AlarmConfig) -> None:
         await self._repo.update_config(config)
 
-    async def evaluate_sensor_reading(self, data: SensorDataResponse) -> None:
-        """根据当前阈值判定温度/湿度/光照是否由正常变为超阈；满足则写入历史并合并广播一次。"""
+    async def evaluate_sensor_reading(
+        self,
+        data: SensorDataResponse,
+        *,
+        metrics_to_evaluate: Optional[FrozenSet[str]] = None,
+    ) -> None:
+        """
+        根据当前阈值判定是否由正常变为超阈；满足则写入历史并合并广播一次。
+
+        ``metrics_to_evaluate``：仅 MQTT 分 topic 上报时使用，只判本包出现的指标；
+        为 ``None`` 时判三项（模拟采样等全量行）。
+        """
         cfg = await self._repo.get_config()
         created: List[AlarmResponse] = []
         anomaly_items: List[AnomalyItem] = []
@@ -78,6 +88,8 @@ class AlarmService:
             ("light", cfg.light_threshold, "光照", "lx", data.light),
         ]
         for metric, threshold, metric_zh, unit, value in checks:
+            if metrics_to_evaluate is not None and metric not in metrics_to_evaluate:
+                continue
             alarm = await self._repo.try_append_threshold_alarm(
                 device_id=data.device_id,
                 metric=metric,

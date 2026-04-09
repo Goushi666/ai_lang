@@ -61,7 +61,7 @@ async def export_data(
     csv_text = await service.export_csv(start_time, end_time)
     return Response(
         content=csv_text,
-        media_type="text/csv",
+        media_type="text/csv; charset=utf-8",
         headers={"Content-Disposition": "attachment; filename=sensor_history.csv"},
     )
 
