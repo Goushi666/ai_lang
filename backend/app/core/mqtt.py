@@ -36,6 +36,7 @@ from typing import Any, Callable, Optional
 import paho.mqtt.client as paho_mqtt
 
 from app.core.config import settings
+from app.core.timeutil import attach_tz_for_mqtt_naive_iso
 
 # paho-mqtt 2.0+ 提供 CallbackAPIVersion；1.x 没有。优先从 enums 导入（官方推荐），
 # 也避免写成 paho_mqtt.CallbackAPIVersion 时部分类型检查器在 client 模块上解析不到。
@@ -108,24 +109,43 @@ def _optional_float_from_keys(data: dict[str, Any], *keys: str) -> float | None:
 
 
 def _parse_timestamp(value: Any) -> datetime:
-    """支持毫秒/秒时间戳或缺省（使用当前 UTC）。"""
+    """
+    支持毫秒/秒时间戳、数字字符串、ISO8601；缺省或无法解析则用当前 UTC。
+
+    **Unix 数值（秒/毫秒）**：惯例为自 1970-01-01 **UTC** 起的 POSIX epoch，与设备所在时区无关；
+    使用 ``datetime.fromtimestamp(..., tz=timezone.utc)`` 解读。**不要**在设备端对秒级 timestamp 再加 28800。
+
+    **无时区 ISO 字符串**：按 ``MQTT_NAIVE_ISO_TIMEZONE``（默认 Asia/Shanghai）当作墙钟再转 UTC；
+    若设备发的是 UTC 无时区串请设 ``MQTT_NAIVE_ISO_TIMEZONE=UTC``。
+
+    - ``bool`` 是 ``int`` 子类，须先排除，避免 True/False 被当成时间戳。
+    - 小于 1e12 的数值按**秒**解析（10 位 Unix 秒等）。
+    """
     if value is None:
+        return datetime.now(timezone.utc)
+    if isinstance(value, bool):
         return datetime.now(timezone.utc)
     if isinstance(value, (int, float)):
         n = float(value)
-        # 毫秒
-        if n > 1e12:
+        if n != n or n == float("inf") or n == float("-inf"):  # NaN / inf
+            return datetime.now(timezone.utc)
+        # 13 位毫秒级
+        if n >= 1e12:
             return datetime.fromtimestamp(n / 1000.0, tz=timezone.utc)
-        if n > 1e9:
+        # 秒级（含 9～10 位 Unix 秒）
+        if n >= 0:
             return datetime.fromtimestamp(n, tz=timezone.utc)
         return datetime.now(timezone.utc)
     if isinstance(value, str):
         s = value.strip()
+        if not s:
+            return datetime.now(timezone.utc)
         if s.isdigit():
             return _parse_timestamp(int(s))
         try:
-            # ISO8601
-            return datetime.fromisoformat(s.replace("Z", "+00:00")).astimezone(timezone.utc)
+            iso = s.replace("Z", "+00:00")
+            dt = datetime.fromisoformat(iso)
+            return attach_tz_for_mqtt_naive_iso(dt)
         except ValueError:
             return datetime.now(timezone.utc)
     return datetime.now(timezone.utc)

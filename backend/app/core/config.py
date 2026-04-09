@@ -36,7 +36,14 @@ class Settings(BaseSettings):
 
     # --- 数据库 ---
     SQLITE_URL: str = "sqlite+aiosqlite:///./app.db"
-    SENSOR_HISTORY_RETENTION_DAYS: int = 0
+    SENSOR_HISTORY_RETENTION_DAYS: int = Field(
+        default=0,
+        description=">0 时：定期删除早于该天数的 sensor_data，并删除 recorded_at 早于该时间的环境异常落库记录；0 表示不清理",
+    )
+    # naive 列含义：空/UTC=按 UTC；Asia/Shanghai=按东八区墙钟再换算（修历史误存）
+    SQLITE_NAIVE_MEANS_TIMEZONE: str = ""
+    # MQTT 无时区 ISO 字符串按何墙钟理解；UTC=严格格林威治；国内设备常发本地无时区串用 Asia/Shanghai
+    MQTT_NAIVE_ISO_TIMEZONE: str = "Asia/Shanghai"
 
     # --- 百度智能云 IoT Core MQTT（账号/主题等均在 .env）---
     MQTT_IOT_CORE_ID: str = ""

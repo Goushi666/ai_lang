@@ -59,7 +59,16 @@ class AlarmRepository:
 
         self._config_store: dict[str, AlarmConfig] = {"default": self._config}
 
-    async def get_history(self, start_time: datetime, end_time: datetime) -> List[AlarmResponse]:
+    async def get_history(
+        self,
+        start_time: datetime,
+        end_time: datetime,
+        *,
+        metric: Optional[str] = None,
+        level: Optional[str] = None,
+        page: int = 1,
+        page_size: int = 20,
+    ) -> Tuple[int, List[AlarmResponse]]:
         st = _to_utc_aware(start_time)
         et = _to_utc_aware(end_time)
         rows = [
@@ -67,8 +76,17 @@ class AlarmRepository:
             for a in self._alarms
             if st <= _to_utc_aware(a.timestamp) <= et
         ]
-        rows.sort(key=lambda x: _to_utc_aware(x.timestamp))
-        return [
+        if metric:
+            rows = [a for a in rows if a.type == metric]
+        if level:
+            rows = [a for a in rows if a.level == level]
+        rows.sort(key=lambda x: _to_utc_aware(x.timestamp), reverse=True)
+        total = len(rows)
+        p = max(1, page)
+        ps = max(1, min(page_size, 500))
+        start_idx = (p - 1) * ps
+        page_rows = rows[start_idx : start_idx + ps]
+        return total, [
             AlarmResponse(
                 id=r.id,
                 type=r.type,
@@ -79,7 +97,7 @@ class AlarmRepository:
                 read=r.read,
                 timestamp=r.timestamp,
             )
-            for r in rows
+            for r in page_rows
         ]
 
     async def mark_read(self, alarm_id: str) -> bool:

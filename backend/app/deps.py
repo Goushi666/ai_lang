@@ -23,8 +23,11 @@ def sensor_service_dep(request: Request) -> SensorService:
 
 
 def alarm_service_dep(request: Request) -> AlarmService:
-    # 与 startup 共用同一内存仓库，否则每次请求新建会导致阈值保存无效
-    return AlarmService(repo=request.app.state.alarm_repo)
+    # 与 startup 共用同一内存仓库；environment_anomalies 与边沿告警共用同一 SQLite 仓库
+    return AlarmService(
+        repo=request.app.state.alarm_repo,
+        environment_anomaly_repo=request.app.state.environment_anomaly_repo,
+    )
 
 
 def vehicle_service_dep(request: Request) -> VehicleService:

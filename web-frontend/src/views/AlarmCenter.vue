@@ -1,116 +1,142 @@
 <template>
   <div class="alarm-center">
     <h2 class="page-title">告警中心</h2>
+    <p class="page-hint">
+      下列为数据库表 <code>environment_anomalies</code> 中的<strong>异常落库记录</strong>（按落库时间筛选）。
+      超阈时已随实时告警自动落库；进入本页或点击「查询」拉取最新列表。删除将<strong>永久删除</strong>对应库记录。
+    </p>
 
-    <!-- 筛选栏 -->
     <el-card shadow="never" class="filter-card">
       <el-row :gutter="16" align="middle">
-        <el-col :span="10">
+        <el-col :xs="24" :sm="12" :md="8">
           <el-date-picker
             v-model="timeRange"
             type="datetimerange"
             range-separator="至"
-            start-placeholder="开始时间"
-            end-placeholder="结束时间"
+            start-placeholder="落库时间起"
+            end-placeholder="落库时间止"
             size="default"
+            style="width: 100%"
           />
         </el-col>
-        <el-col :span="6">
-          <el-select v-model="levelFilter" placeholder="告警级别" clearable size="default">
-            <el-option label="低" value="low" />
-            <el-option label="中" value="medium" />
-            <el-option label="高" value="high" />
-            <el-option label="紧急" value="urgent" />
+        <el-col :xs="12" :sm="6" :md="4">
+          <el-select
+            v-model="metricFilter"
+            placeholder="异常指标"
+            clearable
+            size="default"
+            style="width: 100%"
+          >
+            <el-option label="全部类型" value="" />
+            <el-option label="温度" value="temperature" />
+            <el-option label="湿度" value="humidity" />
+            <el-option label="光照" value="light" />
           </el-select>
         </el-col>
-        <el-col :span="8" class="filter-actions">
-          <el-button type="primary" @click="refreshHistory">查询</el-button>
-          <el-button type="primary" @click="exportCsv" :disabled="!filteredAlarms.length">
+        <el-col :xs="24" :sm="24" :md="12" class="filter-actions">
+          <el-button type="primary" @click="onSearch">查询</el-button>
+          <el-button type="primary" @click="exportCsv" :disabled="total === 0" :loading="exporting">
             导出 CSV
+          </el-button>
+          <el-button
+            type="danger"
+            class="btn-danger-solid"
+            :disabled="!selectedRows.length"
+            @click="confirmBatchDelete"
+          >
+            批量删除
           </el-button>
         </el-col>
       </el-row>
     </el-card>
 
-    <!-- 告警表格 -->
     <el-card shadow="hover" class="table-card">
-      <el-table :data="filteredAlarms" stripe style="width: 100%" empty-text="暂无告警">
-        <el-table-column prop="id" label="ID" width="120" />
-        <el-table-column label="类型" width="100">
-          <template #default="{ row }">
-            {{ typeLabel(row.type) }}
-          </template>
+      <el-table
+        ref="tableRef"
+        :data="rows"
+        stripe
+        style="width: 100%"
+        empty-text="暂无记录"
+        @selection-change="onSelectionChange"
+      >
+        <el-table-column type="selection" width="48" fixed="left" />
+        <el-table-column prop="id" label="ID" width="72" />
+        <el-table-column prop="device_id" label="设备" width="120" show-overflow-tooltip />
+        <el-table-column label="指标" width="88">
+          <template #default="{ row }">{{ typeLabel(row.metric) }}</template>
         </el-table-column>
-        <el-table-column label="级别" width="100">
-          <template #default="{ row }">
-            <el-tag :type="levelTagType(row.level)" effect="dark" size="small">
-              {{ levelLabel(row.level) }}
-            </el-tag>
-          </template>
+        <el-table-column prop="rule_id" label="规则" width="140" show-overflow-tooltip />
+        <el-table-column label="峰值" width="88">
+          <template #default="{ row }">{{ row.peak ?? "--" }}</template>
         </el-table-column>
-        <el-table-column prop="message" label="告警信息" min-width="200" />
-        <el-table-column label="触发值" width="100">
-          <template #default="{ row }">{{ row.value ?? '--' }}</template>
+        <el-table-column label="阈值" width="88">
+          <template #default="{ row }">{{ row.threshold ?? "--" }}</template>
         </el-table-column>
-        <el-table-column label="阈值" width="100">
-          <template #default="{ row }">{{ row.threshold ?? '--' }}</template>
-        </el-table-column>
-        <el-table-column label="时间" width="180">
-          <template #default="{ row }">{{ formatTime(row.timestamp) }}</template>
-        </el-table-column>
-        <el-table-column label="状态" width="80">
-          <template #default="{ row }">
-            <el-tag :type="row.read ? 'info' : 'danger'" size="small">
-              {{ row.read ? '已读' : '未读' }}
-            </el-tag>
-          </template>
+        <el-table-column prop="detail_zh" label="说明" min-width="200" show-overflow-tooltip />
+        <el-table-column label="落库时间" width="168">
+          <template #default="{ row }">{{ formatIso(row.recorded_at) }}</template>
         </el-table-column>
         <el-table-column label="操作" width="100" fixed="right">
           <template #default="{ row }">
-            <el-button
-              v-if="!row.read"
-              type="primary"
-              size="small"
-              class="btn-mark-read"
-              @click="markRead(row.id)"
-            >
-              标记已读
+            <el-button type="danger" size="small" class="btn-danger-solid" @click="confirmDelete(row)">
+              删除
             </el-button>
           </template>
         </el-table-column>
       </el-table>
+
+      <div v-if="total > 0" class="pager-wrap">
+        <el-pagination
+          v-model:current-page="currentPage"
+          v-model:page-size="pageSize"
+          :total="total"
+          :page-sizes="[10, 15, 20, 50]"
+          layout="total, sizes, prev, pager, next, jumper"
+          background
+          @current-change="refreshList"
+          @size-change="onPageSizeChange"
+        />
+      </div>
     </el-card>
   </div>
 </template>
 
 <script setup>
-import { computed, inject, onMounted, onUnmounted, ref } from "vue";
-import { ElMessage } from "element-plus";
-import { alarmApi } from "../api/alarm";
+import { onMounted, ref } from "vue";
+import { ElMessage, ElMessageBox } from "element-plus";
+import { monitoringApi } from "../api/monitoring";
+import { formatDateTimeZh } from "@/utils/datetime";
 
-const ws = inject("ws");
-const alarms = ref([]);
-const levelFilter = ref("");
+const rows = ref([]);
+const metricFilter = ref("");
 const timeRange = ref([
-  new Date(Date.now() - 24 * 60 * 60 * 1000),
+  new Date(Date.now() - 7 * 24 * 60 * 60 * 1000),
   new Date(),
 ]);
+const currentPage = ref(1);
+const pageSize = ref(15);
+const total = ref(0);
+const exporting = ref(false);
+const tableRef = ref(null);
+const selectedRows = ref([]);
 
-/* ---------- 筛选 ---------- */
-const filteredAlarms = computed(() => {
-  if (!levelFilter.value) return alarms.value;
-  return alarms.value.filter((a) => a.level === levelFilter.value);
-});
-
-/* ---------- 工具函数 ---------- */
-function levelTagType(level) {
-  const map = { low: "info", medium: "warning", high: "danger", urgent: "danger" };
-  return map[level] || "info";
+function onSelectionChange(sel) {
+  selectedRows.value = sel || [];
 }
 
-function levelLabel(level) {
-  const map = { low: "低", medium: "中", high: "高", urgent: "紧急" };
-  return map[level] || level;
+function buildQuery(overrides = {}) {
+  const [start, end] = timeRange.value || [];
+  const limit = overrides.limit ?? pageSize.value;
+  const page = overrides.page ?? currentPage.value;
+  const q = {
+    start_time: start.toISOString(),
+    end_time: end.toISOString(),
+    limit,
+    offset: Math.max(0, (page - 1) * limit),
+  };
+  const mf = metricFilter.value;
+  if (mf) q.metric = mf;
+  return q;
 }
 
 function typeLabel(type) {
@@ -118,10 +144,10 @@ function typeLabel(type) {
   return map[type] || type || "--";
 }
 
-function formatTime(ts) {
-  if (!ts) return "--";
-  const d = typeof ts === "number" ? new Date(ts) : new Date(ts);
-  return d.toLocaleString();
+function formatIso(iso) {
+  if (!iso) return "--";
+  const t = formatDateTimeZh(iso);
+  return t || String(iso);
 }
 
 function escapeCsvCell(s) {
@@ -130,103 +156,171 @@ function escapeCsvCell(s) {
   return t;
 }
 
-function exportCsv() {
-  const rows = filteredAlarms.value;
-  if (!rows.length) {
-    ElMessage.warning("暂无数据可导出，请先查询或等待告警产生");
-    return;
-  }
-  const header = ["ID", "类型", "级别", "告警信息", "触发值", "阈值", "时间", "状态"];
-  const lines = [header.join(",")];
-  for (const row of rows) {
-    lines.push(
-      [
-        escapeCsvCell(row.id),
-        escapeCsvCell(typeLabel(row.type)),
-        escapeCsvCell(levelLabel(row.level)),
-        escapeCsvCell(row.message),
-        escapeCsvCell(row.value),
-        escapeCsvCell(row.threshold),
-        escapeCsvCell(formatTime(row.timestamp)),
-        escapeCsvCell(row.read ? "已读" : "未读"),
-      ].join(",")
-    );
-  }
-  const blob = new Blob(["\ufeff" + lines.join("\r\n")], { type: "text/csv;charset=utf-8" });
-  const url = URL.createObjectURL(blob);
-  const a = document.createElement("a");
-  a.href = url;
-  a.download = `alarms_${new Date().toISOString().slice(0, 19).replace(/:/g, "-")}.csv`;
-  a.click();
-  URL.revokeObjectURL(url);
-  ElMessage.success("已导出当前列表（含级别筛选）");
-}
-
-/* ---------- 数据操作 ---------- */
-async function refreshHistory() {
+async function exportCsv() {
   if (!timeRange.value || timeRange.value.length < 2) return;
+  exporting.value = true;
+  const pageSz = 200;
   try {
-    const res = await alarmApi.getHistory({
-      start_time: timeRange.value[0].toISOString(),
-      end_time: timeRange.value[1].toISOString(),
-    });
-    alarms.value = res || [];
+    const all = [];
+    let page = 1;
+    let t = 0;
+    while (true) {
+      const res = await monitoringApi.listAnomalyRecords(
+        buildQuery({ limit: pageSz, page }),
+      );
+      t = res.total ?? 0;
+      const chunk = res.items || [];
+      all.push(...chunk);
+      if (all.length >= t || chunk.length === 0) break;
+      page += 1;
+    }
+    if (!all.length) {
+      ElMessage.warning("暂无数据可导出");
+      return;
+    }
+    const header = [
+      "ID",
+      "设备",
+      "指标",
+      "规则",
+      "峰值",
+      "阈值",
+      "说明",
+      "落库时间",
+    ];
+    const lines = [header.join(",")];
+    for (const row of all) {
+      lines.push(
+        [
+          escapeCsvCell(row.id),
+          escapeCsvCell(row.device_id),
+          escapeCsvCell(typeLabel(row.metric)),
+          escapeCsvCell(row.rule_id),
+          escapeCsvCell(row.peak),
+          escapeCsvCell(row.threshold),
+          escapeCsvCell(row.detail_zh),
+          escapeCsvCell(formatIso(row.recorded_at)),
+        ].join(","),
+      );
+    }
+    const blob = new Blob(["\ufeff" + lines.join("\r\n")], { type: "text/csv;charset=utf-8" });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = `environment_anomalies_${new Date().toISOString().slice(0, 19).replace(/:/g, "-")}.csv`;
+    a.click();
+    URL.revokeObjectURL(url);
+    ElMessage.success(`已导出 ${all.length} 条`);
   } catch (e) {
     // eslint-disable-next-line no-console
     console.error(e);
-    ElMessage.error("拉取告警历史失败，请确认后端可用且时间范围有效");
+    ElMessage.error("导出失败，请确认后端可用");
+  } finally {
+    exporting.value = false;
   }
 }
 
-function normalizeWsAlarm(p) {
-  return {
-    id: p.id || `alarm_${Date.now()}`,
-    type: p.type || "temperature",
-    level: p.level || "high",
-    message: p.message || "",
-    value: p.value,
-    threshold: p.threshold,
-    read: p.read ?? false,
-    timestamp: p.timestamp,
-  };
+function onSearch() {
+  currentPage.value = 1;
+  refreshList();
 }
 
-function prependAlarmsFromWsPayload(payload) {
-  const list =
-    payload && Array.isArray(payload.alarms) && payload.alarms.length
-      ? payload.alarms
-      : payload && payload.id != null
-        ? [payload]
-        : [];
-  for (const p of [...list].reverse()) {
-    alarms.value.unshift(normalizeWsAlarm(p));
+function onPageSizeChange() {
+  currentPage.value = 1;
+  refreshList();
+}
+
+async function refreshList() {
+  if (!timeRange.value || timeRange.value.length < 2) return;
+  try {
+    const res = await monitoringApi.listAnomalyRecords(buildQuery());
+    rows.value = res.items || [];
+    total.value = res.total ?? 0;
+  } catch (e) {
+    // eslint-disable-next-line no-console
+    console.error(e);
+    rows.value = [];
+    total.value = 0;
+    ElMessage.error("加载失败，请确认后端可用且时间范围有效");
   }
 }
 
-const onAlarmWs = (payload) => prependAlarmsFromWsPayload(payload);
-
-async function markRead(id) {
-  await alarmApi.markRead(id);
-  const item = alarms.value.find((a) => a.id === id);
-  if (item) item.read = true;
+async function confirmBatchDelete() {
+  const ids = selectedRows.value.map((r) => r.id).filter((id) => id != null);
+  if (!ids.length) return;
+  try {
+    await ElMessageBox.confirm(
+      `确定删除已选 ${ids.length} 条异常记录吗？此操作不可恢复。`,
+      "批量删除",
+      { type: "warning", confirmButtonText: "删除", cancelButtonText: "取消" },
+    );
+  } catch {
+    return;
+  }
+  try {
+    const res = await monitoringApi.batchDeleteAnomalyRecords({ ids });
+    const deleted = res?.deleted ?? 0;
+    const requested = res?.requested ?? ids.length;
+    if (deleted < requested) {
+      ElMessage.warning(`已删除 ${deleted} 条（请求 ${requested} 条，部分 id 可能不存在）`);
+    } else {
+      ElMessage.success(`已删除 ${deleted} 条`);
+    }
+    tableRef.value?.clearSelection();
+    await refreshList();
+  } catch (e) {
+    // eslint-disable-next-line no-console
+    console.error(e);
+    ElMessage.error("批量删除失败");
+  }
 }
 
-/* ---------- 生命周期 ---------- */
-onMounted(async () => {
-  await refreshHistory();
-  ws.on("alarm", onAlarmWs);
-});
+async function confirmDelete(row) {
+  try {
+    await ElMessageBox.confirm(
+      `确定删除 ID=${row.id} 的异常记录吗？此操作不可恢复。`,
+      "删除确认",
+      { type: "warning", confirmButtonText: "删除", cancelButtonText: "取消" },
+    );
+  } catch {
+    return;
+  }
+  try {
+    await monitoringApi.deleteAnomalyRecord(row.id);
+    ElMessage.success("已删除");
+    tableRef.value?.clearSelection();
+    await refreshList();
+  } catch (e) {
+    // eslint-disable-next-line no-console
+    console.error(e);
+    ElMessage.error("删除失败");
+  }
+}
 
-onUnmounted(() => {
-  ws.off("alarm", onAlarmWs);
+onMounted(() => {
+  refreshList();
 });
 </script>
 
 <style scoped>
 .page-title {
-  margin: 0 0 20px 0;
+  margin: 0 0 12px 0;
   font-size: 20px;
   color: #303133;
+}
+
+.page-hint {
+  margin: 0 0 16px 0;
+  font-size: 12px;
+  color: #909399;
+  line-height: 1.5;
+}
+
+.page-hint code {
+  font-size: 11px;
+  padding: 1px 4px;
+  background: #f4f4f5;
+  border-radius: 3px;
 }
 
 .filter-card {
@@ -245,14 +339,36 @@ onUnmounted(() => {
   gap: 8px;
 }
 
-/* 表格内蓝底白字，避免主题下对比度不足 */
-.table-card :deep(.btn-mark-read.el-button--primary) {
-  --el-button-bg-color: var(--el-color-primary);
-  --el-button-border-color: var(--el-color-primary);
-  --el-button-hover-bg-color: var(--el-color-primary-light-3);
-  --el-button-hover-border-color: var(--el-color-primary-light-3);
-  --el-button-active-bg-color: var(--el-color-primary-dark-2);
-  --el-button-active-border-color: var(--el-color-primary-dark-2);
-  color: #fff;
+.pager-wrap {
+  display: flex;
+  justify-content: flex-end;
+  margin-top: 16px;
+  padding-top: 8px;
+}
+
+/* 实心红底白字，悬停略浅 */
+.table-card :deep(.btn-danger-solid.el-button--danger),
+.filter-actions :deep(.btn-danger-solid.el-button--danger) {
+  --el-button-bg-color: #c62828;
+  --el-button-border-color: #c62828;
+  --el-button-hover-bg-color: #e53935;
+  --el-button-hover-border-color: #e53935;
+  --el-button-active-bg-color: #b71c1c;
+  --el-button-active-border-color: #b71c1c;
+  background-color: #c62828 !important;
+  border-color: #c62828 !important;
+  color: #fff !important;
+}
+.table-card :deep(.btn-danger-solid.el-button--danger:hover),
+.table-card :deep(.btn-danger-solid.el-button--danger:focus),
+.filter-actions :deep(.btn-danger-solid.el-button--danger:hover),
+.filter-actions :deep(.btn-danger-solid.el-button--danger:focus) {
+  background-color: #e53935 !important;
+  border-color: #e53935 !important;
+  color: #fff !important;
+}
+.table-card :deep(.btn-danger-solid.el-button--danger.is-disabled),
+.filter-actions :deep(.btn-danger-solid.el-button--danger.is-disabled) {
+  opacity: 0.5;
 }
 </style>

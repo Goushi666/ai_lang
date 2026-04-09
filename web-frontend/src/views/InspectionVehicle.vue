@@ -2,7 +2,7 @@
   <div class="inspection-vehicle">
     <h2 class="page-title">巡检与遥控</h2>
 
-    <!-- 左 70% 视频；右 30%：运行状态 + 速度与云台 + 方向控制 -->
+    <!-- 左 70% 视频；右 30%：运行状态 + 云台 + 遥控面板（方向含行驶速度） -->
     <div class="inspection-layout">
       <div class="layout-col layout-col--video">
         <el-card shadow="never" class="video-card">
@@ -106,36 +106,28 @@
             <el-card shadow="never" class="speed-gimbal-card compact-panel">
               <template #header>
                 <div class="card-head-stack">
-                  <span class="card-head">速度与云台</span>
-                  <el-text type="info" size="small">云台三项拖动即下发 MQTT</el-text>
+                  <span class="card-head">云台</span>
+                  <el-text type="info" size="small">松手后下发；拖哪条只发该条（转速条会带当前两关节角）</el-text>
                 </div>
               </template>
               <div class="param-row">
-                <span class="param-row-label">行驶速度</span>
-                <div class="param-row-slider">
-                  <el-slider v-model="speed" :min="0" :max="100" :step="5" size="small" />
-                </div>
-                <span class="param-row-val">{{ speed }}</span>
-              </div>
-              <el-divider class="panel-divider" />
-              <div class="param-row">
                 <span class="param-row-label">关节 6</span>
                 <div class="param-row-slider">
-                  <el-slider v-model="gimbalJ6" :min="0" :max="180" :step="1" size="small" />
+                  <el-slider v-model="gimbalJ6" :min="0" :max="180" :step="1" size="small" @change="onGimbalJ6Change" />
                 </div>
                 <span class="param-row-val">{{ gimbalJ6 }}°</span>
               </div>
               <div class="param-row">
                 <span class="param-row-label">关节 7</span>
                 <div class="param-row-slider">
-                  <el-slider v-model="gimbalJ7" :min="0" :max="90" :step="1" size="small" />
+                  <el-slider v-model="gimbalJ7" :min="0" :max="90" :step="1" size="small" @change="onGimbalJ7Change" />
                 </div>
                 <span class="param-row-val">{{ gimbalJ7 }}°</span>
               </div>
               <div class="param-row">
                 <span class="param-row-label">云台转速</span>
                 <div class="param-row-slider">
-                  <el-slider v-model="gimbalSpeed" :min="0" :max="100" :step="5" size="small" />
+                  <el-slider v-model="gimbalSpeed" :min="0" :max="100" :step="5" size="small" @change="onGimbalSpeedChange" />
                 </div>
                 <span class="param-row-val">{{ gimbalSpeed }}</span>
               </div>
@@ -150,7 +142,7 @@
                       {{
                         controlPanelMode === "vehicle"
                           ? "方向：W/A/S/D、空格停"
-                          : "机械臂：拖动即下发 MQTT（与云台同 topic）"
+                          : "机械臂：松手后下发；拖哪个关节只发该关节（转速条会带齐 6 角）"
                       }}
                     </el-text>
                   </div>
@@ -162,6 +154,13 @@
               </template>
 
               <div v-show="controlPanelMode === 'vehicle'" class="control-body">
+                <div class="param-row vehicle-speed-row">
+                  <span class="param-row-label">行驶速度</span>
+                  <div class="param-row-slider">
+                    <el-slider v-model="speed" :min="0" :max="100" :step="5" size="small" />
+                  </div>
+                  <span class="param-row-val">{{ speed }}</span>
+                </div>
                 <div class="dpad-center">
                   <div class="dpad">
                     <div class="dpad-row">
@@ -224,6 +223,7 @@
                         :step="1"
                         size="small"
                         @update:model-value="(v) => setArmAngle(i - 1, v)"
+                        @change="() => onArmJointChange(i - 1)"
                       />
                     </div>
                     <span class="param-row-val arm-val">{{ armAngles[i - 1] }}°</span>
@@ -231,7 +231,7 @@
                   <div class="param-row arm-param-row">
                     <span class="param-row-label arm-label">机械臂转速</span>
                     <div class="param-row-slider arm-slider-wrap">
-                      <el-slider v-model="armSpeed" :min="0" :max="100" :step="5" size="small" />
+                      <el-slider v-model="armSpeed" :min="0" :max="100" :step="5" size="small" @change="onArmSpeedChange" />
                     </div>
                     <span class="param-row-val arm-val">{{ armSpeed }}</span>
                   </div>
@@ -246,7 +246,7 @@
 </template>
 
 <script setup>
-import { inject, nextTick, onMounted, onUnmounted, ref, watch } from "vue";
+import { inject, nextTick, onMounted, onUnmounted, ref } from "vue";
 import { ElMessage } from "element-plus";
 import { VideoCamera, Top, Bottom, Back, Right, VideoPause } from "@element-plus/icons-vue";
 import Hls from "hls.js";
@@ -274,71 +274,60 @@ function setArmAngle(index, value) {
   armAngles.value = next;
 }
 
-const GIMBAL_DEBOUNCE_MS = 220;
-let gimbalMqttTimer = null;
-
-const ARM_DEBOUNCE_MS = 220;
-let armMqttTimer = null;
-
-async function flushGimbalMqtt() {
+async function sendGimbalPartial(body) {
   try {
-    await vehicleApi.sendGimbal({
-      joint_6_angle: gimbalJ6.value,
-      joint_7_angle: gimbalJ7.value,
-      speed: gimbalSpeed.value,
-    });
+    await vehicleApi.sendGimbal(body);
   } catch (e) {
     const msg = e?.response?.data?.detail;
     ElMessage.error(typeof msg === "string" ? msg : "云台下发失败，请确认 MQTT 已连接");
   }
 }
 
-function scheduleGimbalMqtt() {
-  if (gimbalMqttTimer) clearTimeout(gimbalMqttTimer);
-  gimbalMqttTimer = setTimeout(() => {
-    gimbalMqttTimer = null;
-    flushGimbalMqtt();
-  }, GIMBAL_DEBOUNCE_MS);
+function onGimbalJ6Change() {
+  sendGimbalPartial({ joint_6_angle: gimbalJ6.value, speed: gimbalSpeed.value });
 }
 
-watch([gimbalJ6, gimbalJ7, gimbalSpeed], () => {
-  scheduleGimbalMqtt();
-});
+function onGimbalJ7Change() {
+  sendGimbalPartial({ joint_7_angle: gimbalJ7.value, speed: gimbalSpeed.value });
+}
 
-async function flushArmMqtt() {
-  const a = armAngles.value;
+function onGimbalSpeedChange() {
+  sendGimbalPartial({
+    joint_6_angle: gimbalJ6.value,
+    joint_7_angle: gimbalJ7.value,
+    speed: gimbalSpeed.value,
+  });
+}
+
+async function sendArmPartial(body) {
   try {
-    await vehicleApi.sendArmJoints({
-      joint_0_angle: a[0],
-      joint_1_angle: a[1],
-      joint_2_angle: a[2],
-      joint_3_angle: a[3],
-      joint_4_angle: a[4],
-      joint_5_angle: a[5],
-      speed: armSpeed.value,
-    });
+    await vehicleApi.sendArmJoints(body);
   } catch (e) {
     const msg = e?.response?.data?.detail;
     ElMessage.error(typeof msg === "string" ? msg : "机械臂下发失败，请确认 MQTT 已连接");
   }
 }
 
-function scheduleArmMqtt() {
-  if (armMqttTimer) clearTimeout(armMqttTimer);
-  armMqttTimer = setTimeout(() => {
-    armMqttTimer = null;
-    flushArmMqtt();
-  }, ARM_DEBOUNCE_MS);
+function onArmJointChange(index) {
+  if (controlPanelMode.value !== "arm") return;
+  const body = { speed: armSpeed.value };
+  body[`joint_${index}_angle`] = armAngles.value[index];
+  sendArmPartial(body);
 }
 
-watch([armAngles, armSpeed], () => {
+function onArmSpeedChange() {
   if (controlPanelMode.value !== "arm") return;
-  scheduleArmMqtt();
-}, { deep: true });
-
-watch(controlPanelMode, (mode) => {
-  if (mode === "arm") scheduleArmMqtt();
-});
+  const a = armAngles.value;
+  sendArmPartial({
+    joint_0_angle: a[0],
+    joint_1_angle: a[1],
+    joint_2_angle: a[2],
+    joint_3_angle: a[3],
+    joint_4_angle: a[4],
+    joint_5_angle: a[5],
+    speed: armSpeed.value,
+  });
+}
 
 const videoEl = ref(null);
 const playMode = ref("none");
@@ -459,14 +448,6 @@ onMounted(async () => {
 });
 
 onUnmounted(() => {
-  if (gimbalMqttTimer) {
-    clearTimeout(gimbalMqttTimer);
-    gimbalMqttTimer = null;
-  }
-  if (armMqttTimer) {
-    clearTimeout(armMqttTimer);
-    armMqttTimer = null;
-  }
   window.removeEventListener("keydown", handleKeydown);
   destroyHls();
 });
@@ -778,6 +759,10 @@ onUnmounted(() => {
   min-height: 0;
   display: flex;
   flex-direction: column;
+}
+.vehicle-speed-row {
+  flex-shrink: 0;
+  margin-bottom: 4px;
 }
 .dpad-center {
   flex: 1 1 0;

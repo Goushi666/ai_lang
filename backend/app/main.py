@@ -15,6 +15,7 @@ from datetime import datetime, timedelta, timezone
 from fastapi import FastAPI, WebSocket
 from fastapi.middleware.cors import CORSMiddleware
 
+from app.api.v1.admin import router as admin_router
 from app.api.v1.agent import router as agent_router
 from app.api.v1.alarms import router as alarms_router
 from app.api.v1.analysis import router as analysis_router
@@ -26,6 +27,7 @@ from app.api.v1.video import router as video_router
 from app.middleware.cors import cors_middleware
 from app.websocket.manager import websocket_manager
 from app.repositories.alarm_repo import AlarmRepository
+from app.repositories.environment_anomaly_repo import EnvironmentAnomalyRepository
 from app.repositories.sensor_repo import SensorRepository
 from app.services.alarm_service import AlarmService
 from app.repositories.vehicle_repo import VehicleRepository
@@ -60,6 +62,7 @@ def create_app() -> FastAPI:
     app.include_router(monitoring_router, prefix="/api/monitoring", tags=["monitoring"])  # 环境监测页
     app.include_router(agent_router, prefix="/api/agent", tags=["agent"])          # 智能 Agent（框架）
     app.include_router(video_router, prefix="/api/video", tags=["video"])        # 车载 MJPEG / HLS 配置与代理
+    app.include_router(admin_router, prefix="/api/admin", tags=["admin"])       # 数据维护（清空表等）
 
     # ---------- 健康检查端点 ----------
     @app.get("/api/health")
@@ -102,9 +105,14 @@ def create_app() -> FastAPI:
         session_factory = get_session_factory()
         sensor_repo = SensorRepository(session_factory)
         app.state.sensor_repo = sensor_repo
+        env_anomaly_repo = EnvironmentAnomalyRepository(session_factory)
+        app.state.environment_anomaly_repo = env_anomaly_repo
         alarm_repo = AlarmRepository()
         app.state.alarm_repo = alarm_repo
-        alarm_service = AlarmService(repo=alarm_repo)
+        alarm_service = AlarmService(
+            repo=alarm_repo,
+            environment_anomaly_repo=env_anomaly_repo,
+        )
         sensor_service = SensorService(repo=sensor_repo, alarm_service=alarm_service)
         app.state.sensor_service = sensor_service
 
@@ -148,19 +156,30 @@ def create_app() -> FastAPI:
                     pass
                 await asyncio.sleep(5)
 
+        anomaly_repo = app.state.environment_anomaly_repo
+
+        async def apply_data_retention() -> None:
+            days = settings.SENSOR_HISTORY_RETENTION_DAYS
+            if days <= 0:
+                return
+            cutoff = datetime.now(timezone.utc) - timedelta(days=days)
+            try:
+                n_s = await sensor_repo.delete_older_than(cutoff)
+                n_a = await anomaly_repo.delete_recorded_before(cutoff)
+                if n_s or n_a:
+                    logger.info(
+                        "数据保留策略删除 sensor_data=%s environment_anomalies=%s（早于 %s）",
+                        n_s,
+                        n_a,
+                        cutoff.isoformat(),
+                    )
+            except Exception:
+                logger.exception("数据保留清理失败")
+
         async def retention_loop() -> None:
             while True:
                 await asyncio.sleep(3600)
-                try:
-                    days = settings.SENSOR_HISTORY_RETENTION_DAYS
-                    if days <= 0:
-                        continue
-                    cutoff = datetime.now(timezone.utc) - timedelta(days=days)
-                    n = await sensor_repo.delete_older_than(cutoff)
-                    if n:
-                        logger.info("传感器历史保留策略删除 %s 条（早于 %s）", n, cutoff.isoformat())
-                except Exception:
-                    logger.exception("传感器历史保留清理失败")
+                await apply_data_retention()
 
         # 将后台任务挂载到 app.state，方便关闭时取消
         if settings.MQTT_DISABLE_SENSOR_SIM:
@@ -168,6 +187,7 @@ def create_app() -> FastAPI:
         else:
             app.state._sensor_task = asyncio.create_task(sensor_loop())
         if settings.SENSOR_HISTORY_RETENTION_DAYS > 0:
+            await apply_data_retention()
             app.state._retention_task = asyncio.create_task(retention_loop())
         else:
             app.state._retention_task = None

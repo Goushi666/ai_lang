@@ -12,6 +12,7 @@ from itertools import groupby
 from typing import Any, List, Optional, Tuple
 
 from app.core.config import settings
+from app.core.timeutil import format_instant_rfc3339_utc_z
 
 logger = logging.getLogger(__name__)
 from app.repositories.sensor_repo import SensorRepository
@@ -35,7 +36,6 @@ _METRIC_ZH = {
     "humidity": "湿度",
     "light": "光照",
 }
-
 
 def _aware_utc(ts: datetime) -> datetime:
     if ts.tzinfo is None:
@@ -101,7 +101,7 @@ def _aggregate_points(points: List[SensorDataResponse]) -> dict[str, AggregateMe
 def _hour_bucket_start_iso(ts: datetime) -> str:
     ts = _aware_utc(ts)
     floored = ts.replace(minute=0, second=0, microsecond=0)
-    return floored.isoformat()
+    return format_instant_rfc3339_utc_z(floored)
 
 
 def _build_hourly_buckets(points: List[SensorDataResponse]) -> List[BucketSeries]:
@@ -116,9 +116,25 @@ def _build_hourly_buckets(points: List[SensorDataResponse]) -> List[BucketSeries
     return out
 
 
-def _fmt_ts_short(dt: datetime) -> str:
-    dt = _aware_utc(dt)
-    return dt.strftime("%Y-%m-%d %H:%M UTC")
+def _peak_in_range_full_series(
+    full_series: List[SensorDataResponse],
+    *,
+    attr: str,
+    t_start: datetime,
+    t_end: datetime,
+) -> Optional[float]:
+    """在完整序列中取 [t_start, t_end] 内该指标最大值（与 downsample 后的 streak 时段对齐）。"""
+    a0 = _aware_utc(t_start)
+    a1 = _aware_utc(t_end)
+    best: Optional[float] = None
+    for p in full_series:
+        ts = _aware_utc(p.timestamp)
+        if ts < a0 or ts > a1:
+            continue
+        v = float(getattr(p, attr))
+        if best is None or v > best:
+            best = v
+    return best
 
 
 def _streak_anomalies_for_device(
@@ -127,6 +143,7 @@ def _streak_anomalies_for_device(
     *,
     cfg: AlarmConfig,
     k: int,
+    full_series: Optional[List[SensorDataResponse]] = None,
 ) -> List[AnomalyItem]:
     anomalies: List[AnomalyItem] = []
     specs = [
@@ -153,10 +170,18 @@ def _streak_anomalies_for_device(
                 start_t = _aware_utc(seg[0].timestamp)
                 end_t = _aware_utc(seg[-1].timestamp)
                 peak_v = max(vals)
+                if full_series:
+                    refined = _peak_in_range_full_series(
+                        full_series,
+                        attr=attr,
+                        t_start=seg[0].timestamp,
+                        t_end=seg[-1].timestamp,
+                    )
+                    if refined is not None:
+                        peak_v = refined
                 mzh = _METRIC_ZH[attr]
                 detail = (
-                    f"设备「{device_id}」{_fmt_ts_short(start_t)} 至 {_fmt_ts_short(end_t)}："
-                    f"{mzh}连续{length}个点高于阈值 {threshold}{unit}，"
+                    f"设备「{device_id}」{mzh}连续{length}个点高于阈值 {threshold}{unit}，"
                     f"这段里最高读数 {round(peak_v, 2)}{unit}。"
                 )
                 anomalies.append(
@@ -164,8 +189,8 @@ def _streak_anomalies_for_device(
                         device_id=device_id,
                         metric=attr,  # type: ignore[arg-type]
                         rule_id=rule_id,
-                        start_time=start_t.isoformat(),
-                        end_time=end_t.isoformat(),
+                        start_time=format_instant_rfc3339_utc_z(start_t),
+                        end_time=format_instant_rfc3339_utc_z(end_t),
                         peak=round(peak_v, 4),
                         threshold=threshold,
                         detail_zh=detail,
@@ -176,17 +201,37 @@ def _streak_anomalies_for_device(
 
 
 def _collect_anomalies(
-    points: List[SensorDataResponse], cfg: AlarmConfig, k: int
+    working: List[SensorDataResponse],
+    cfg: AlarmConfig,
+    k: int,
+    *,
+    full_sorted: List[SensorDataResponse],
 ) -> List[AnomalyItem]:
-    if not points:
+    """
+    ``working`` 可能经均匀下采样，仅用于判定连续超阈；峰值在 ``full_sorted`` 同设备、
+    与该 streak 起止时刻对齐的区间内取 max，避免落库峰值低于真实采样尖峰。
+    """
+    if not working:
         return []
-    ordered = sorted(points, key=lambda p: (p.device_id, p.timestamp))
+    full_by_dev: dict[str, List[SensorDataResponse]] = defaultdict(list)
+    for p in full_sorted:
+        full_by_dev[p.device_id].append(p)
+    for lst in full_by_dev.values():
+        lst.sort(key=lambda p: p.timestamp)
+
+    ordered = sorted(working, key=lambda p: (p.device_id, p.timestamp))
     all_a: List[AnomalyItem] = []
     for device_id, grp in groupby(ordered, key=lambda p: p.device_id):
         dev_list = list(grp)
         dev_list.sort(key=lambda p: p.timestamp)
         all_a.extend(
-            _streak_anomalies_for_device(device_id, dev_list, cfg=cfg, k=k)
+            _streak_anomalies_for_device(
+                device_id,
+                dev_list,
+                cfg=cfg,
+                k=k,
+                full_series=full_by_dev.get(device_id),
+            )
         )
     return all_a
 
@@ -226,7 +271,7 @@ def _build_lines_plain(
 ) -> List[str]:
     dev_txt = "全部设备合并统计" if out_device == "all" else f"仅设备「{out_device}」"
     lines = [
-        f"查询时段：{start_time.isoformat()} ～ {end_time.isoformat()}（与接口入参一致）。",
+        f"查询时段：{format_instant_rfc3339_utc_z(start_time)} ～ {format_instant_rfc3339_utc_z(end_time)}（与接口入参一致）。",
         f"统计范围：{dev_txt}。",
         f"该时段从数据库读到 {sample_in} 条记录；参与计算 {sample_used} 条。",
     ]
@@ -287,7 +332,7 @@ def _build_chart_points(
         out.append(
             ChartPoint(
                 time_ms=int(ts.timestamp() * 1000),
-                time_iso=ts.isoformat(),
+                time_iso=format_instant_rfc3339_utc_z(ts),
                 temperature=round(p.temperature, 4),
                 humidity=round(p.humidity, 4),
                 light=round(p.light, 4),
@@ -358,7 +403,7 @@ class AnalysisService:
         insufficient = point_count < min_required
         anomalies: List[AnomalyItem] = []
         if not insufficient:
-            anomalies = _collect_anomalies(working, cfg, k)
+            anomalies = _collect_anomalies(working, cfg, k, full_sorted=filtered_sorted)
 
         summary_code, summary_label = _derive_summary_code(insufficient, anomalies)
 
@@ -401,9 +446,15 @@ class AnalysisService:
         )
         forecast = compute_temperature_forecast(filtered_sorted)
 
+        # 不在此落库：本方法会被监测页 GET /anomalies 等频繁调用，若 persist 会导致每次切屏重复插入。
+        # environment_anomalies 仅由 AlarmService 超阈边沿写入（与弹窗同源）。
+
         return EnvironmentSummaryResponse(
             device_id=out_device,
-            window=TimeWindow(start=start_time.isoformat(), end=end_time.isoformat()),
+            window=TimeWindow(
+                start=format_instant_rfc3339_utc_z(start_time),
+                end=format_instant_rfc3339_utc_z(end_time),
+            ),
             aggregate=agg,
             buckets=buckets,
             anomalies=[] if insufficient else anomalies,
@@ -482,7 +533,7 @@ class AnalysisService:
             ts = _aware_utc(p.timestamp)
             w.writerow(
                 [
-                    ts.isoformat(),
+                    format_instant_rfc3339_utc_z(ts),
                     p.device_id,
                     p.temperature,
                     p.humidity,

@@ -1,7 +1,7 @@
 from datetime import datetime
 from typing import Optional
 
-from pydantic import BaseModel
+from pydantic import BaseModel, field_serializer
 
 
 class SensorDataResponse(BaseModel):
@@ -14,6 +14,12 @@ class SensorDataResponse(BaseModel):
     humidity: float
     light: float
     timestamp: datetime
+
+    @field_serializer("timestamp", when_used="json")
+    def _json_timestamp_utc_z(self, v: datetime) -> str:
+        from app.core.timeutil import format_instant_rfc3339_utc_z
+
+        return format_instant_rfc3339_utc_z(v)
 
 
 class SensorHistoryQuery(BaseModel):

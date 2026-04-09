@@ -28,7 +28,7 @@ async def send_gimbal(
     payload: GimbalControlRequest = Body(...),
     service: VehicleService = Depends(vehicle_service_dep),
 ):
-    """向 MQTT `arm/control` 连续发布 joint 6、joint 7 各一条（QoS 1，与 SmartCar 手册一致）。"""
+    """向 MQTT `arm/control` 发布云台关节；仅对请求体中出现的关节各发一条（QoS 1）。"""
     if not settings.MQTT_ENABLED or not (settings.MQTT_TOPIC_ARM_CONTROL or "").strip():
         raise HTTPException(
             status_code=503,
@@ -50,7 +50,7 @@ async def send_arm_joints(
     payload: ArmJointsControlRequest = Body(...),
     service: VehicleService = Depends(vehicle_service_dep),
 ):
-    """向 MQTT `arm/control` 连续发布 joint 0~5 各一条（QoS 1，与 SmartCar 手册一致）。"""
+    """向 MQTT `arm/control` 发布机械臂关节；仅对请求体中出现的关节各发一条（QoS 1）。"""
     if not settings.MQTT_ENABLED or not (settings.MQTT_TOPIC_ARM_CONTROL or "").strip():
         raise HTTPException(
             status_code=503,

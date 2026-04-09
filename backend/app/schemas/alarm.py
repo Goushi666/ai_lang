@@ -1,7 +1,7 @@
 from datetime import datetime
-from typing import Optional
+from typing import List
 
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 
 
 class AlarmResponse(BaseModel):
@@ -22,6 +22,13 @@ class AlarmResponse(BaseModel):
     threshold: float
     timestamp: datetime
     read: bool
+
+
+class AlarmHistoryPage(BaseModel):
+    """分页告警历史：按时间倒序（最新在前）。"""
+
+    total: int = Field(description="满足时间与筛选条件的总条数")
+    items: List[AlarmResponse] = Field(default_factory=list)
 
 
 class AlarmConfig(BaseModel):

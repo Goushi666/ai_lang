@@ -13,6 +13,7 @@ from datetime import datetime, timedelta, timezone
 from typing import List, Optional, Tuple
 
 from app.core.config import settings
+from app.core.timeutil import format_instant_rfc3339_utc_z
 from app.schemas.analysis import ForecastHourPoint, TemperatureForecast
 from app.schemas.sensor import SensorDataResponse
 
@@ -92,14 +93,14 @@ def temperature_forecast_damped_linear(
         hours.append(
             ForecastHourPoint(
                 hours_after_last_sample=h,
-                time_iso=future_dt.isoformat(),
+                time_iso=format_instant_rfc3339_utc_z(future_dt),
                 temperature_c=round(y_hat, 2),
             )
         )
 
     return TemperatureForecast(
         based_on_points=len(pts),
-        anchor_time_iso=last_dt.isoformat(),
+        anchor_time_iso=format_instant_rfc3339_utc_z(last_dt),
         last_observed_temperature_c=round(last_temp, 2),
         horizon_hours=len(hours),
         method="linear_regression_damped",
@@ -145,7 +146,7 @@ def temperature_forecast_lstm_rollout(
         hours_out.append(
             ForecastHourPoint(
                 hours_after_last_sample=h,
-                time_iso=future_dt.isoformat(),
+                time_iso=format_instant_rfc3339_utc_z(future_dt),
                 temperature_c=temp_c,
             )
         )
@@ -154,7 +155,7 @@ def temperature_forecast_lstm_rollout(
 
     return TemperatureForecast(
         based_on_points=len(sorted_filtered),
-        anchor_time_iso=last_dt.isoformat(),
+        anchor_time_iso=format_instant_rfc3339_utc_z(last_dt),
         last_observed_temperature_c=last_observed_temp,
         horizon_hours=len(hours_out),
         method="lstm",

@@ -1,12 +1,22 @@
-from datetime import datetime
+from datetime import datetime, timezone
 from typing import TYPE_CHECKING, Any, List, Optional
 
+from app.core.timeutil import utc_aware_from_db_naive
 from app.repositories.sensor_repo import SensorRepository
 from app.schemas.sensor import SensorDataResponse
 from app.websocket.manager import websocket_manager
 
 if TYPE_CHECKING:
     from app.services.alarm_service import AlarmService
+
+
+def _utc_epoch_ms_from_instant(dt: datetime) -> int:
+    """与库内 naive UTC 墙钟一致，避免 Windows 下 naive 被当作本地时区导致 epoch 偏差 8 小时。"""
+    if dt.tzinfo is None:
+        aware = utc_aware_from_db_naive(dt)
+    else:
+        aware = dt.astimezone(timezone.utc)
+    return int(aware.timestamp() * 1000)
 
 
 class SensorService:
@@ -49,7 +59,7 @@ class SensorService:
 
     async def broadcast_sensor_record(self, data: SensorDataResponse) -> None:
         """将已持久化（内存）的采样按前端协议广播（与 push_sensor_data 的 WebSocket 结构一致）。"""
-        ts_ms = int(data.timestamp.timestamp() * 1000)
+        ts_ms = _utc_epoch_ms_from_instant(data.timestamp)
         await websocket_manager.broadcast(
             {
                 "type": "sensor_data",

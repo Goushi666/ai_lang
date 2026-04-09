@@ -2,66 +2,157 @@
 
 ## 1. 目标
 
-提供基于 **大语言模型（LLM）** 的对话能力，通过 **服务端工具（Tool / Function Calling）** 安全访问本系统内的只读数据（传感器、告警、车辆状态、环境分析结果等），辅助运维人员 **查询、归纳、解释**；**车辆控制、改配置等写操作** 须严格受限或人机确认后再执行。
+在井场监测平台上加一个 **基于大模型的对话助手**，用自然语言完成日常运维中的 **查询、归纳、报告生成、文档问答** 等重复性工作，减轻值班负担。
 
-## 2. 功能需求
+Agent **只做语义层封装**：数据与计算仍由现有 `sensor_service` / `alarm_service` / `vehicle_service` / `analysis_service` 等模块提供，Agent 通过 **工具调用（Function Calling）** 访问它们。
 
-### 2.1 对话接口
+---
 
-- 提供 **HTTP 对话入口**，例如 `POST /api/agent/chat`：
-  - 请求体包含：`messages`（多轮角色 user/assistant/system）、可选 `session_id`；
-  - 响应为 **完整回复文本**（首版）或 **SSE/流式分块**（演进），字段需包含 `content`，可选 `tool_calls` 审计信息（仅调试或管理端）。
-- 支持 **多轮上下文**：服务端按 `session_id` 维护短期历史，或客户端每次携带完整 messages（上限条数/Token 可配置）。
+## 2. 功能清单
 
-### 2.2 工具（Tools）
+### 2.1 对话查询（P0，必做）
 
-至少规划并实现以下 **只读工具**（名称与参数在实现中与 LLM Schema 一致）：
+用户用自然语言问，Agent 调后端工具拿数据后回答。
 
-| 工具 | 能力 |
+- 查传感器最新值 / 历史趋势
+- 查告警列表 / 告警详情
+- 查环境分析结果（聚合、异常片段）
+
+### 2.2 报告生成（P1）
+
+一句话生成结构化报告，输出 Markdown：
+
+- 日报（昨日告警统计\数据统计）
+- 触发 CSV 导出（复用现有导出接口）
+
+### 2.3 告警智能分诊（P1）
+
+告警中心每条告警旁加「问 AI」按钮。Agent 自动拉取告警前后的传感器数据与环境分析结果，给出 **可能原因 + 建议动作**。
+
+### 2.4 文档问答（P2）
+
+对 `doc/` 下的 PRD、SOP、故障手册做向量化检索，回答"XX 怎么排查 / 怎么操作"类问题，附引用来源。
+
+### 2.5 预测联动（P2）
+
+调用已有的 `temperature_forecast` 模型，回答"未来几小时会不会超限"并给出提示。
+
+### 2.6 受控操作（P3，分期实现）
+
+在 **严格二次确认** 下编排车辆巡检或修改告警阈值：
+
+- Agent 只生成「动作计划」，不直接执行；
+- 前端弹确认框展示计划，用户点确认后才真正下发指令；
+- 所有控制类操作写审计日志。
+
+默认 **关闭**（`AGENT_CONTROL_TOOLS_ENABLED=false`）。
+
+---
+
+## 3. 接口
+
+| 方法 | 路径 | 说明 |
+|------|------|------|
+| GET  | `/api/agent/health` | 是否启用、模型可达性 |
+| POST | `/api/agent/chat` | 对话，支持 SSE 流式（`Accept: text/event-stream`）|
+| POST | `/api/agent/confirm` | 确认 control 类工具的待执行动作 |
+| DELETE | `/api/agent/sessions/{sid}` | 清空会话 |
+
+---
+
+## 4. 设计思路
+
+### 4.1 整体结构
+
+```
+Vue 聊天面板
+    │  SSE
+FastAPI /api/agent/*
+    │
+AgentService（调度循环）
+    ├── LLM 客户端（OpenAI 兼容，支持 DeepSeek/Qwen/Kimi）
+    ├── 工具注册表（统一 schema）
+    └── 会话存储（Redis）
+         │
+各工具包装现有 service 层（不直接读库）
+```
+
+### 4.2 调度循环
+
+简单的 Function Calling 循环：
+
+```
+while True:
+    resp = llm.chat(messages, tools=TOOLS, stream=True)
+    if resp.tool_calls:
+        for call in tool_calls:
+            result = tool_registry[call.name].run(**args)
+            messages.append(tool_result)
+        continue
+    else:
+        yield resp.content   # SSE 流式返回
+        break
+```
+
+循环有 **次数上限（默认 10）** 和 **总超时（默认 60s）**，防死循环。
+
+### 4.3 工具分三类
+
+| 类别 | 例子 | 执行策略 |
+|------|------|----------|
+| read | 查传感器 / 告警 / 车辆 / 分析结果 | 直接执行 |
+| write | 生成报告、确认告警 | 直接执行 + 写审计 |
+| control | 车辆控制、改阈值 | **先返回 pending_action，等前端确认后再执行** |
+
+### 4.4 会话
+
+Redis 存短期对话历史，key = `agent:session:{sid}`，默认 TTL 24h。历史按轮数或 token 滚动裁剪。
+
+### 4.5 安全
+
+- **系统提示词固定在服务端**，硬约束"只能用工具取数，不得编造数值"
+- **API Key 只从环境变量读**，禁止入库
+- **速率限制** 按 IP/用户限流（默认 10 次/分）
+- **成本预算** 每会话 / 每日 token 上限，超限降级
+- **审计日志** 记录工具名、参数摘要、耗时，**不记完整 prompt**
+
+### 4.6 降级
+
+- `AGENT_ENABLED=false` 时所有接口返回 503，前端隐藏入口
+- 模型不可用时返回明确错误，平台其他功能不受影响
+
+---
+
+## 5. 关键配置项
+
+| 配置项 | 说明 |
+|--------|------|
+| `AGENT_ENABLED` | 总开关 |
+| `AGENT_LLM_BASE_URL` / `AGENT_LLM_API_KEY` / `AGENT_LLM_MODEL` | OpenAI 兼容接口配置 |
+| `AGENT_LOOP_TIMEOUT_SEC` | 对话循环总超时（默认 60） |
+| `AGENT_MAX_TOOL_CALLS` | 单次对话工具调用上限（默认 10） |
+| `AGENT_SESSION_TTL_SEC` | 会话过期时间（默认 86400） |
+| `AGENT_RATE_LIMIT_PER_MIN` | 限流阈值（默认 10） |
+| `AGENT_CONTROL_TOOLS_ENABLED` | control 类工具开关（默认 false） |
+| `AGENT_RAG_ENABLED` | 文档检索开关（默认 false） |
+
+---
+
+## 6. 分期
+
+| 阶段 | 范围 |
 |------|------|
-| `get_sensor_latest` | 当前最新温湿度光照 |
-| `get_sensor_history` | 按起止时间查询历史（条数上限） |
-| `get_alarms_history` | 按时间范围查告警 |
-| `get_vehicle_status` | 当前车辆状态 |
-| `get_environment_analysis` | 调用环境分析模块，返回结构化摘要与聚合 |
+| **P0** | LLM 接入 + SSE 流式 + 只读工具（传感器/告警/车辆/分析/设备）+ 会话 + 开关 |
+| **P1** | 报告生成工具 + 告警分诊 + 速率限制 + 审计日志 |
+| **P2** | 文档 RAG + 预测工具 |
+| **P3** | Control 类工具 + 二次确认链路 |
 
-**写类工具**（如 `post_vehicle_control`、`put_alarm_config`）：
+---
 
-- 首版可 **不提供**；若提供，必须：**独立权限、二次确认 token、或仅模拟环境开放**，并全量审计日志。
+## 7. 验收要点
 
-### 2.3 模型与配置
-
-- API Key、Base URL、模型名等通过 **环境变量** 配置，禁止写入仓库。
-- 支持 **关闭 Agent**（如 `AGENT_ENABLED=false`）时，接口返回 503 或 404，前端隐藏入口。
-
-### 2.4 安全与合规
-
-- **提示词注入防护**：对用户输入做基本过滤；系统提示词固定模板，明确「仅通过工具访问数据，不得编造实时数值」。
-- **速率限制**：按 IP 或用户（若已登录）限制请求频率，防止滥用与费用失控。
-- **审计**：记录时间、会话、用户标识（若有）、调用的工具名及参数摘要（脱敏）、耗时；不写全量 prompt 到日志（可选采样）。
-
-### 2.5 与环境分析的关系
-
-- **数值统计、聚合** 在 **AnalysisService** 完成；Agent 通过 `get_environment_analysis` 获取结果，**不在模型侧做精确计算**。
-
-## 3. 接口需求（REST）
-
-| 方法 | 路径 | 说明 |
-|------|------|------|
-| POST | `/api/agent/chat` | 非流式对话 |
-| GET | `/api/agent/stream`（可选） | SSE 流式；或使用 POST + `Accept: text/event-stream` |
-
-健康与配置：
-
-| 方法 | 路径 | 说明 |
-|------|------|------|
-| GET | `/api/agent/health`（可选） | 是否启用、模型是否可达（脱敏） |
-
-## 4. WebSocket
-
-- **首版不强制**：对话以 HTTP/SSE 为主，避免与现有 `/ws` 业务推送混淆；若统一长连接，需独立子协议或 `type: agent_chunk` 约定。
-
-## 5. 非功能需求
-
-- 超时：单次对话含工具循环总时长上限（如 60s），避免挂死。
-- 降级：模型不可用时返回明确错误，前端提示「智能助手暂不可用」。
+1. `AGENT_ENABLED=false` 时接口返回 503，前端入口隐藏
+2. 无数据时 Agent 明确说"无数据"而不是编造
+3. 工具循环不超过次数上限，到上限优雅终止
+4. control 类工具未确认前不会下发任何实际指令
+5. 模型故障不影响平台其他功能

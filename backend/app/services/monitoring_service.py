@@ -9,6 +9,7 @@ from datetime import datetime, timedelta, timezone
 from typing import List, Optional
 
 from app.core.config import settings
+from app.core.timeutil import format_instant_rfc3339_utc_z
 from app.repositories.sensor_repo import SensorRepository
 from app.schemas.monitoring import (
     MonitoringTemperatureTimelineResponse,
@@ -321,7 +322,7 @@ def build_two_hour_temperature_timeline(
         method_zh = method_zh + " " + future_hint_zh
 
     return MonitoringTemperatureTimelineResponse(
-        now_iso=now.isoformat(),
+        now_iso=format_instant_rfc3339_utc_z(now),
         method=method,
         method_zh=method_zh,
         past_actual=past_actual,

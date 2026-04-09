@@ -28,16 +28,41 @@
 
       <el-skeleton :rows="4" v-else animated />
     </el-card>
+
+    <el-card shadow="hover" class="settings-card danger-zone">
+      <template #header><span>数据库维护</span></template>
+      <p class="danger-hint">
+        当前 SQLite（<code>app.db</code>）内两张业务表：传感器采样 <code>sensor_data</code>、环境异常落库
+        <code>environment_anomalies</code>。下方可一键清空，<strong>不可恢复</strong>。
+      </p>
+      <div class="purge-checks">
+        <el-checkbox v-model="purgeSensor">清空传感器采样（sensor_data）</el-checkbox>
+        <el-checkbox v-model="purgeAnomalies">清空环境异常记录（environment_anomalies）</el-checkbox>
+      </div>
+      <el-button
+        type="danger"
+        class="btn-purge-solid"
+        :disabled="!purgeSensor && !purgeAnomalies"
+        :loading="purging"
+        @click="confirmPurge"
+      >
+        一键清空所选表
+      </el-button>
+    </el-card>
   </div>
 </template>
 
 <script setup>
 import { onMounted, ref } from "vue";
-import { ElMessage } from "element-plus";
+import { ElMessage, ElMessageBox } from "element-plus";
 import { alarmApi } from "../api/alarm";
+import { adminApi } from "../api/admin";
 
 const config = ref(null);
 const saving = ref(false);
+const purging = ref(false);
+const purgeSensor = ref(true);
+const purgeAnomalies = ref(true);
 
 async function load() {
   try {
@@ -65,6 +90,36 @@ async function save() {
   }
 }
 
+async function confirmPurge() {
+  if (!purgeSensor.value && !purgeAnomalies.value) return;
+  const parts = [];
+  if (purgeSensor.value) parts.push("sensor_data（全部采样）");
+  if (purgeAnomalies.value) parts.push("environment_anomalies（异常落库）");
+  try {
+    await ElMessageBox.confirm(
+      `将永久删除：${parts.join("、")}。此操作不可恢复，是否继续？`,
+      "危险操作",
+      { type: "error", confirmButtonText: "确认清空", cancelButtonText: "取消" },
+    );
+  } catch {
+    return;
+  }
+  purging.value = true;
+  try {
+    const res = await adminApi.purgeData({
+      sensor_data: purgeSensor.value,
+      environment_anomalies: purgeAnomalies.value,
+    });
+    ElMessage.success(
+      `已清空：采样 ${res.sensor_data_deleted ?? 0} 条，异常记录 ${res.environment_anomalies_deleted ?? 0} 条`,
+    );
+  } catch {
+    ElMessage.error("清空失败，请确认后端可用");
+  } finally {
+    purging.value = false;
+  }
+}
+
 onMounted(load);
 </script>
 
@@ -77,5 +132,47 @@ onMounted(load);
 .settings-card {
   border-radius: 8px;
   max-width: 640px;
+  margin-bottom: 16px;
+}
+.danger-zone :deep(.el-card__header) {
+  color: #b71c1c;
+  font-weight: 600;
+}
+.danger-hint {
+  font-size: 12px;
+  color: #606266;
+  line-height: 1.6;
+  margin: 0 0 12px 0;
+}
+.danger-hint code {
+  font-size: 11px;
+  padding: 1px 4px;
+  background: #fef0f0;
+  border-radius: 3px;
+}
+.purge-checks {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  margin-bottom: 14px;
+}
+.btn-purge-solid {
+  background-color: #c62828 !important;
+  border-color: #c62828 !important;
+  color: #fff !important;
+}
+.btn-purge-solid:hover,
+.btn-purge-solid:focus {
+  background-color: #e53935 !important;
+  border-color: #e53935 !important;
+  color: #fff !important;
+}
+.btn-purge-solid:active {
+  background-color: #b71c1c !important;
+  border-color: #b71c1c !important;
+  color: #fff !important;
+}
+.btn-purge-solid.is-disabled {
+  opacity: 0.55;
 }
 </style>

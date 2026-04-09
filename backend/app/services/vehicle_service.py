@@ -60,35 +60,50 @@ class VehicleService:
             }
         )
 
-    async def send_gimbal_mqtt(self, joint_6_angle: int, joint_7_angle: int, speed: int) -> None:
-        """手册 3.4：`{"joint","angle","speed"}`；云台仅下发 6、7 号关节各一条消息（QoS 1）。"""
+    async def send_gimbal_mqtt(
+        self,
+        joint_6_angle: int | None = None,
+        joint_7_angle: int | None = None,
+        speed: int | None = None,
+    ) -> None:
+        """手册 3.4：`{"joint","angle","speed"}`；仅对本次传入的关节各发一条（QoS 1）。"""
         arm_topic = (settings.MQTT_TOPIC_ARM_CONTROL or "").strip()
-        for joint, angle in ((6, joint_6_angle), (7, joint_7_angle)):
+        eff_speed = int(speed) if speed is not None else 50
+        published = []
+        if joint_6_angle is not None:
             payload = json.dumps(
-                {"joint": joint, "angle": int(angle), "speed": int(speed)},
+                {"joint": 6, "angle": int(joint_6_angle), "speed": eff_speed},
                 separators=(",", ":"),
             )
             await mqtt_client.publish(arm_topic, payload, qos=1)
+            published.append((6, joint_6_angle))
+        if joint_7_angle is not None:
+            payload = json.dumps(
+                {"joint": 7, "angle": int(joint_7_angle), "speed": eff_speed},
+                separators=(",", ":"),
+            )
+            await mqtt_client.publish(arm_topic, payload, qos=1)
+            published.append((7, joint_7_angle))
         logger.info(
-            "MQTT arm/control published joints 6,7 angles=%s,%s speed=%s topic=%s",
-            joint_6_angle,
-            joint_7_angle,
-            speed,
+            "MQTT arm/control gimbal published=%s eff_speed=%s topic=%s",
+            published,
+            eff_speed,
             arm_topic,
         )
 
     async def send_arm_joints_mqtt(
         self,
-        joint_0_angle: int,
-        joint_1_angle: int,
-        joint_2_angle: int,
-        joint_3_angle: int,
-        joint_4_angle: int,
-        joint_5_angle: int,
-        speed: int,
+        joint_0_angle: int | None = None,
+        joint_1_angle: int | None = None,
+        joint_2_angle: int | None = None,
+        joint_3_angle: int | None = None,
+        joint_4_angle: int | None = None,
+        joint_5_angle: int | None = None,
+        speed: int | None = None,
     ) -> None:
-        """手册 3.4：`{"joint","angle","speed"}`；机械臂下发 0~5 号关节各一条消息（QoS 1）。"""
+        """手册 3.4：`{"joint","angle","speed"}`；仅对本次传入的关节各发一条（QoS 1）。"""
         arm_topic = (settings.MQTT_TOPIC_ARM_CONTROL or "").strip()
+        eff_speed = int(speed) if speed is not None else 50
         angles = (
             joint_0_angle,
             joint_1_angle,
@@ -97,15 +112,20 @@ class VehicleService:
             joint_4_angle,
             joint_5_angle,
         )
+        published = []
         for joint, angle in enumerate(angles):
+            if angle is None:
+                continue
             payload = json.dumps(
-                {"joint": joint, "angle": int(angle), "speed": int(speed)},
+                {"joint": joint, "angle": int(angle), "speed": eff_speed},
                 separators=(",", ":"),
             )
             await mqtt_client.publish(arm_topic, payload, qos=1)
+            published.append(joint)
         logger.info(
-            "MQTT arm/control published joints 0-5 speed=%s topic=%s",
-            speed,
+            "MQTT arm/control arm joints published=%s eff_speed=%s topic=%s",
+            published,
+            eff_speed,
             arm_topic,
         )
 

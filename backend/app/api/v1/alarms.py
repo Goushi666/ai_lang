@@ -1,10 +1,10 @@
 from datetime import datetime
-from typing import List
+from typing import Literal, Optional
 
 from fastapi import APIRouter, Depends, Query, Path
 
 from app.deps import alarm_service_dep
-from app.schemas.alarm import AlarmConfig, AlarmResponse
+from app.schemas.alarm import AlarmConfig, AlarmHistoryPage
 from app.services.alarm_service import AlarmService
 
 
@@ -21,13 +21,31 @@ router = APIRouter()
 """
 
 
-@router.get("/history", response_model=List[AlarmResponse])
+@router.get("/history", response_model=AlarmHistoryPage)
 async def get_history(
-    start_time: datetime = Query(...),
-    end_time: datetime = Query(...),
+    start_time: datetime = Query(..., description="开始时间（含）"),
+    end_time: datetime = Query(..., description="结束时间（含）"),
+    metric: Optional[Literal["temperature", "humidity", "light"]] = Query(
+        None,
+        description="仅温度/湿度/光照；不传为全部",
+    ),
+    level: Optional[Literal["low", "medium", "high", "urgent"]] = Query(
+        None,
+        description="告警级别；不传为全部",
+    ),
+    page: int = Query(1, ge=1, description="页码，从 1 起"),
+    page_size: int = Query(20, ge=1, le=500, description="每页条数"),
     service: AlarmService = Depends(alarm_service_dep),
 ):
-    return await service.get_history(start_time, end_time)
+    """历史告警分页查询，按触发时间倒序（最新在前）。"""
+    return await service.get_history(
+        start_time,
+        end_time,
+        metric=metric,
+        level=level,
+        page=page,
+        page_size=page_size,
+    )
 
 
 @router.put("/{alarm_id}/read")

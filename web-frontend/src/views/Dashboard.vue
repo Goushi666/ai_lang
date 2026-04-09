@@ -45,9 +45,38 @@
       <!-- 温度曲线 -->
       <el-card class="g-ct" shadow="never">
         <template #header>
-          <div class="ch-hd">
-            温度（2 小时）
-            <span class="ch-sub">实测 + 推算</span>
+          <div class="ch-hd ch-hd-row">
+            <div class="ch-hd-text">
+              温度（2 小时）
+              <span class="ch-sub">实测 + 推算</span>
+            </div>
+            <div class="ch-zoom-bar" aria-label="温度图缩放">
+              <el-tooltip content="时间轴放大（看更短时段）" placement="top">
+                <el-button class="ch-zoom-btn" text size="small" @click="zoomTempTime('in')">
+                  <el-icon><ZoomIn /></el-icon>
+                </el-button>
+              </el-tooltip>
+              <el-tooltip content="时间轴缩小（看更长时段）" placement="top">
+                <el-button class="ch-zoom-btn" text size="small" @click="zoomTempTime('out')">
+                  <el-icon><ZoomOut /></el-icon>
+                </el-button>
+              </el-tooltip>
+              <el-tooltip content="纵轴放大（突出小幅温度变化）" placement="top">
+                <el-button class="ch-zoom-btn" text size="small" @click="zoomTempY('in')">
+                  <el-icon><Top /></el-icon>
+                </el-button>
+              </el-tooltip>
+              <el-tooltip content="纵轴缩小（恢复刻度范围）" placement="top">
+                <el-button class="ch-zoom-btn" text size="small" @click="zoomTempY('out')">
+                  <el-icon><Bottom /></el-icon>
+                </el-button>
+              </el-tooltip>
+              <el-tooltip content="重置本图缩放" placement="top">
+                <el-button class="ch-zoom-btn" text size="small" @click="resetTempZoom">
+                  <el-icon><RefreshLeft /></el-icon>
+                </el-button>
+              </el-tooltip>
+            </div>
           </div>
         </template>
         <div class="ch-body">
@@ -60,7 +89,36 @@
       <!-- 湿度 / 光照曲线 -->
       <el-card class="g-ch" shadow="never">
         <template #header>
-          <div class="ch-hd">湿度与光照（2 小时）</div>
+          <div class="ch-hd ch-hd-row">
+            <div class="ch-hd-text">湿度与光照（2 小时）</div>
+            <div class="ch-zoom-bar" aria-label="湿度光照图缩放">
+              <el-tooltip content="时间轴放大" placement="top">
+                <el-button class="ch-zoom-btn" text size="small" @click="zoomHumTime('in')">
+                  <el-icon><ZoomIn /></el-icon>
+                </el-button>
+              </el-tooltip>
+              <el-tooltip content="时间轴缩小" placement="top">
+                <el-button class="ch-zoom-btn" text size="small" @click="zoomHumTime('out')">
+                  <el-icon><ZoomOut /></el-icon>
+                </el-button>
+              </el-tooltip>
+              <el-tooltip content="纵轴放大（湿度/光照刻度）" placement="top">
+                <el-button class="ch-zoom-btn" text size="small" @click="zoomHumY('in')">
+                  <el-icon><Top /></el-icon>
+                </el-button>
+              </el-tooltip>
+              <el-tooltip content="纵轴缩小" placement="top">
+                <el-button class="ch-zoom-btn" text size="small" @click="zoomHumY('out')">
+                  <el-icon><Bottom /></el-icon>
+                </el-button>
+              </el-tooltip>
+              <el-tooltip content="重置本图缩放" placement="top">
+                <el-button class="ch-zoom-btn" text size="small" @click="resetHumZoom">
+                  <el-icon><RefreshLeft /></el-icon>
+                </el-button>
+              </el-tooltip>
+            </div>
+          </div>
         </template>
         <div class="ch-body">
           <div ref="humChartRef" class="chart-shell" />
@@ -85,37 +143,52 @@
             </el-alert>
             <p v-if="anomalyBroadcast" class="bc-anomaly-hint">{{ anomalyBroadcast }}</p>
             <div v-if="anomalies.length" class="bc-anomaly-list">
-              <div v-for="(a, i) in anomalies" :key="i" class="bc-anomaly-pill" :title="a.detail_zh || a.metric">
+              <div
+                v-for="a in displayedAnomalies"
+                :key="`${a.device_id}-${a.metric}-${a.start_time}`"
+                class="bc-anomaly-pill"
+                :title="a.detail_zh || a.metric"
+              >
                 {{ a.detail_zh || `${a.metric} 异常` }}
               </div>
             </div>
             <p v-else class="bc-anomaly-ok">近 24 小时无连续超阈异常记录</p>
-            <p v-if="latest?.timestamp" class="bc-meta">最近上报：{{ formatTime(latest.timestamp) }}</p>
+            <div
+              v-if="anomalies.length > ANOMALY_DISPLAY_MAX || latest?.timestamp"
+              class="bc-anomaly-footer-row"
+            >
+              <span v-if="anomalies.length > ANOMALY_DISPLAY_MAX" class="bc-anomaly-truncate-hint">
+                共 {{ anomalies.length }} 条异常片段，以下仅展示最近 {{ ANOMALY_DISPLAY_MAX }} 条
+              </span>
+              <span v-if="latest?.timestamp" class="bc-meta">最近上报：{{ formatTime(latest.timestamp) }}</span>
+            </div>
           </div>
           <div class="bc-tools" aria-label="快捷操作">
             <div class="bc-tools-head">快捷操作</div>
-            <el-button
-              class="bc-btn bc-btn-export"
-              type="primary"
-              :loading="exporting"
-              @click="exportLast24h"
-            >
-              <el-icon class="bc-ico"><Download /></el-icon>
-              <span>导出近24小时数据</span>
-            </el-button>
-            <el-button class="bc-btn bc-btn-refresh" @click="refreshAll">
-              <el-icon class="bc-ico"><Refresh /></el-icon>
-              <span>手动刷新</span>
-            </el-button>
-            <el-button
-              class="bc-btn bc-btn-speak"
-              type="success"
-              :disabled="!canSpeakTempAlert"
-              @click="speakTempAlert"
-            >
-              <el-icon class="bc-ico"><Microphone /></el-icon>
-              <span>语音播报</span>
-            </el-button>
+            <div class="bc-tools-actions">
+              <el-button
+                class="bc-btn bc-btn-export"
+                type="primary"
+                :loading="exporting"
+                @click="exportLast24h"
+              >
+                <el-icon class="bc-ico"><Download /></el-icon>
+                <span>导出近24小时数据</span>
+              </el-button>
+              <el-button class="bc-btn bc-btn-refresh" @click="refreshAll">
+                <el-icon class="bc-ico"><Refresh /></el-icon>
+                <span>手动刷新</span>
+              </el-button>
+              <el-button
+                class="bc-btn bc-btn-speak"
+                type="success"
+                :disabled="!canSpeakTempAlert"
+                @click="speakTempAlert"
+              >
+                <el-icon class="bc-ico"><Microphone /></el-icon>
+                <span>语音播报</span>
+              </el-button>
+            </div>
           </div>
         </div>
       </el-card>
@@ -127,10 +200,23 @@
 import { computed, inject, nextTick, onMounted, onUnmounted, ref } from "vue";
 import * as echarts from "echarts";
 import { ElMessage } from "element-plus";
-import { Sunny, Drizzling, Sunrise, Download, Refresh, Microphone } from "@element-plus/icons-vue";
+import {
+  Sunny,
+  Drizzling,
+  Sunrise,
+  Download,
+  Refresh,
+  Microphone,
+  ZoomIn,
+  ZoomOut,
+  RefreshLeft,
+  Top,
+  Bottom,
+} from "@element-plus/icons-vue";
 import { sensorApi } from "../api/sensor";
 import { monitoringApi } from "../api/monitoring";
 import { alarmApi } from "../api/alarm";
+import { formatDateTimeZh, parseBackendInstant, parseSensorPayloadTimestampMs } from "@/utils/datetime";
 
 const ws = inject("ws");
 
@@ -141,6 +227,8 @@ const timeline = ref(null);
 /** 图表「过去推算」用：首次/手动刷新用接口值，轮询时用「旧未来」滚入合并，避免整条线随请求抖动 */
 const displayPastPredicted = ref([]);
 const anomalies = ref([]);
+/** 实时异常条目标签最多展示条数（按片段结束时间取最近） */
+const ANOMALY_DISPLAY_MAX = 8;
 const tempChartRef = ref(null);
 const humChartRef = ref(null);
 let tempChart = null;
@@ -149,6 +237,10 @@ let pollTimer = null;
 
 // 实时曲线数据缓冲（保留 2 小时）
 const MAX_REALTIME_MS = 2 * 60 * 60 * 1000;
+/** 单序列最多保留点数，避免历史接口极密采样撑爆内存与 ECharts */
+const MAX_BUFFER_POINTS = 4500;
+/** 绘图时下采样上限，显著降低 line/smooth 的 CPU */
+const MAX_CHART_POINTS = 1600;
 const tempRealtime = [];   // [{time_ms, value}]
 const humRealtime = [];    // [{time_ms, value}]
 const lightRealtime = [];  // [{time_ms, value}]
@@ -156,6 +248,67 @@ const lightRealtime = [];  // [{time_ms, value}]
 function pruneOld(arr) {
   const cutoff = Date.now() - MAX_REALTIME_MS;
   while (arr.length > 0 && arr[0].time_ms < cutoff) arr.shift();
+}
+
+/** 按索引均匀下采样，保持时间顺序，首尾保留 */
+function thinSortedBuffer(arr, maxLen) {
+  if (!arr || arr.length <= maxLen) return;
+  const n = arr.length;
+  const out = [];
+  const denom = Math.max(1, maxLen - 1);
+  for (let i = 0; i < maxLen; i++) {
+    const idx = Math.min(n - 1, Math.round((i * (n - 1)) / denom));
+    out.push(arr[idx]);
+  }
+  arr.splice(0, arr.length, ...out);
+}
+
+/** [[t,v],...] → 最多 maxN 点，供 ECharts 使用 */
+function downsamplePairs(pairs, maxN) {
+  if (!pairs || pairs.length <= maxN) return pairs || [];
+  const n = pairs.length;
+  const out = [];
+  const denom = Math.max(1, maxN - 1);
+  for (let i = 0; i < maxN; i++) {
+    const idx = Math.min(n - 1, Math.round((i * (n - 1)) / denom));
+    out.push(pairs[idx]);
+  }
+  return out;
+}
+
+function maybeThinBuffers() {
+  thinSortedBuffer(tempRealtime, MAX_BUFFER_POINTS);
+  thinSortedBuffer(humRealtime, MAX_BUFFER_POINTS);
+  thinSortedBuffer(lightRealtime, MAX_BUFFER_POINTS);
+}
+
+/**
+ * WebSocket 追加温湿光；若与缓冲区末尾 time_ms 相同则覆盖该点（不追加）。
+ * 后端按 UTC 整秒合并时，同秒内 dht / light 分包会多次广播且时间戳毫秒相同；
+ * 若每次都 push，会出现同 x 不同 y，ECharts 连成竖线，光照变化大时尤其明显；湿度不变则像「只有光照折一下」。
+ */
+function appendRealtimeTriplet(time_ms, temperature, humidity, light) {
+  if (tempRealtime.length > 0 && tempRealtime[tempRealtime.length - 1].time_ms === time_ms) {
+    const i = tempRealtime.length - 1;
+    tempRealtime[i] = { time_ms, value: temperature };
+    humRealtime[i] = { time_ms, value: humidity };
+    lightRealtime[i] = { time_ms, value: light };
+    return;
+  }
+  tempRealtime.push({ time_ms, value: temperature });
+  humRealtime.push({ time_ms, value: humidity });
+  lightRealtime.push({ time_ms, value: light });
+}
+
+/** WebSocket 高频推送时合并到下一帧只 setOption 一次 */
+let chartUpdateRaf = 0;
+function scheduleRealtimeCharts() {
+  if (chartUpdateRaf) return;
+  chartUpdateRaf = requestAnimationFrame(() => {
+    chartUpdateRaf = 0;
+    applyTempChart(timeline.value);
+    applyHumChartRealtime();
+  });
 }
 
 /* ---------- 格式化 ---------- */
@@ -230,6 +383,16 @@ const anomalyBroadcast = computed(() => {
   const types = [...new Set(anomalies.value.map((a) => a.metric))];
   const names = types.map((t) => ({ temperature: "温度", humidity: "湿度", light: "光照" }[t] || t));
   return `注意：过去24小时存在${names.join("、")}超阈异常。`;
+});
+
+const displayedAnomalies = computed(() => {
+  const list = (anomalies.value || []).slice();
+  list.sort((a, b) => {
+    const tb = Date.parse(b.end_time);
+    const ta = Date.parse(a.end_time);
+    return (Number.isNaN(tb) ? 0 : tb) - (Number.isNaN(ta) ? 0 : ta);
+  });
+  return list.slice(0, ANOMALY_DISPLAY_MAX);
 });
 
 const timelineHint = computed(() => timeline.value?.method_zh || "");
@@ -315,9 +478,8 @@ function mergePastFromRoll(tl) {
 
 function formatTime(ts) {
   if (ts == null) return "";
-  const x = typeof ts === "number" ? ts : Date.parse(ts);
-  if (Number.isNaN(x)) return String(ts);
-  return new Date(x).toLocaleString();
+  const t = formatDateTimeZh(ts);
+  return t || String(ts);
 }
 
 function speakTempAlert() {
@@ -342,13 +504,104 @@ const chartLegendSmall = {
   textStyle: { fontSize: 10 },
 };
 
+/** 图表缩放：时间/纵轴按钮与 dataZoom 共用 */
+const CH_ZOOM_FACTOR = 0.72;
+const CH_GRID_BOTTOM = 52;
+const CH_LEGEND_BOTTOM = 26;
+const CH_SLIDER_H = 16;
+
+function getChartDataZoomList(chart) {
+  const list = chart?.getOption()?.dataZoom;
+  return Array.isArray(list) ? list : [];
+}
+
+function zoomTimeAxisOnChart(chart, dir) {
+  if (!chart) return;
+  const dz = getChartDataZoomList(chart);
+  const idx = dz.findIndex((d) => d.xAxisIndex !== undefined && d.xAxisIndex !== false);
+  if (idx < 0) return;
+  const cur = dz[idx];
+  const start = cur.start ?? 0;
+  const end = cur.end ?? 100;
+  const span = Math.max(end - start, 0.5);
+  const mid = (start + end) / 2;
+  let newSpan = dir === "in" ? span * CH_ZOOM_FACTOR : span / CH_ZOOM_FACTOR;
+  newSpan = Math.min(100, Math.max(1.5, newSpan));
+  let ns = mid - newSpan / 2;
+  let ne = mid + newSpan / 2;
+  if (ns < 0) {
+    ne -= ns;
+    ns = 0;
+  }
+  if (ne > 100) {
+    ns -= ne - 100;
+    ne = 100;
+  }
+  ns = Math.max(0, ns);
+  ne = Math.min(100, ne);
+  chart.dispatchAction({ type: "dataZoom", dataZoomIndex: idx, start: ns, end: ne });
+}
+
+function zoomYInsideOnChart(chart, dir) {
+  if (!chart) return;
+  const dz = getChartDataZoomList(chart);
+  dz.forEach((d, idx) => {
+    if (d.type !== "inside" || d.yAxisIndex === undefined) return;
+    const start = d.start ?? 0;
+    const end = d.end ?? 100;
+    const span = Math.max(end - start, 0.5);
+    const mid = (start + end) / 2;
+    let newSpan = dir === "in" ? span * CH_ZOOM_FACTOR : span / CH_ZOOM_FACTOR;
+    newSpan = Math.min(100, Math.max(4, newSpan));
+    let ns = mid - newSpan / 2;
+    let ne = mid + newSpan / 2;
+    if (ns < 0) {
+      ne -= ns;
+      ns = 0;
+    }
+    if (ne > 100) {
+      ns -= ne - 100;
+      ne = 100;
+    }
+    ns = Math.max(0, ns);
+    ne = Math.min(100, ne);
+    chart.dispatchAction({ type: "dataZoom", dataZoomIndex: idx, start: ns, end: ne });
+  });
+}
+
+function resetChartDataZoom(chart) {
+  if (!chart) return;
+  getChartDataZoomList(chart).forEach((_, idx) => {
+    chart.dispatchAction({ type: "dataZoom", dataZoomIndex: idx, start: 0, end: 100 });
+  });
+}
+
+function zoomTempTime(dir) {
+  zoomTimeAxisOnChart(tempChart, dir);
+}
+function zoomHumTime(dir) {
+  zoomTimeAxisOnChart(humChart, dir);
+}
+function zoomTempY(dir) {
+  zoomYInsideOnChart(tempChart, dir);
+}
+function zoomHumY(dir) {
+  zoomYInsideOnChart(humChart, dir);
+}
+function resetTempZoom() {
+  resetChartDataZoom(tempChart);
+}
+function resetHumZoom() {
+  resetChartDataZoom(humChart);
+}
+
 function tempAxisTooltipFormatter(params) {
   if (!Array.isArray(params) || !params.length) return "";
   const axisVal = params[0]?.axisValue;
   let timeStr = "";
   if (axisVal != null) {
     const tMs = typeof axisVal === "number" ? axisVal : Date.parse(axisVal);
-    if (!Number.isNaN(tMs)) timeStr = new Date(tMs).toLocaleString();
+    if (!Number.isNaN(tMs)) timeStr = formatDateTimeZh(tMs);
   }
   const rows = params
     .filter((p) => p.seriesName && !String(p.seriesName).startsWith("__"))
@@ -366,26 +619,58 @@ function initTempChart() {
   if (!tempChartRef.value) return;
   tempChart = echarts.init(tempChartRef.value);
   tempChart.setOption({
+    animation: false,
     tooltip: { trigger: "axis", formatter: tempAxisTooltipFormatter },
-    legend: { ...chartLegendSmall, data: ["实测", "过去推算", "未来推算", "未来参考带"] },
-    grid: { left: 42, right: 10, top: 6, bottom: 28, containLabel: true },
+    toolbox: {
+      right: 6,
+      top: 2,
+      itemSize: 14,
+      feature: {
+        dataZoom: {
+          yAxisIndex: false,
+          title: { zoom: "框选放大", back: "取消框选" },
+        },
+        restore: { title: "还原" },
+      },
+    },
+    legend: {
+      ...chartLegendSmall,
+      bottom: CH_LEGEND_BOTTOM,
+      data: ["实测", "过去推算", "未来推算", "未来参考带"],
+    },
+    grid: { left: 42, right: 10, top: 22, bottom: CH_GRID_BOTTOM, containLabel: true },
+    dataZoom: [
+      { type: "inside", xAxisIndex: 0, filterMode: "none" },
+      { type: "inside", yAxisIndex: 0, filterMode: "none" },
+      {
+        type: "slider",
+        xAxisIndex: 0,
+        filterMode: "none",
+        height: CH_SLIDER_H,
+        bottom: 2,
+        showDetail: false,
+      },
+    ],
     xAxis: { type: "time", axisLabel: { fontSize: 10 } },
     yAxis: { type: "value", name: "℃", scale: true, nameTextStyle: { fontSize: 10 }, axisLabel: { fontSize: 10 } },
     series: [
       {
         name: "实测",
         type: "line",
-        smooth: true,
-        showSymbol: true,
-        symbolSize: 3,
+        smooth: 0.35,
+        sampling: "lttb",
+        showSymbol: false,
+        symbolSize: 0,
         data: [],
+        lineStyle: { width: 1.5 },
         itemStyle: { color: "#409eff" },
         z: 3,
       },
       {
         name: "过去推算",
         type: "line",
-        smooth: true,
+        smooth: 0.35,
+        sampling: "lttb",
         showSymbol: false,
         data: [],
         lineStyle: { type: "dashed", color: "#e6a23c", width: 1.5 },
@@ -394,7 +679,8 @@ function initTempChart() {
       {
         name: "未来推算",
         type: "line",
-        smooth: true,
+        smooth: 0.35,
+        sampling: "lttb",
         showSymbol: false,
         data: [],
         lineStyle: { type: "dashed", color: "#67c23a", width: 1.5 },
@@ -429,20 +715,55 @@ function initHumChart() {
   if (!humChartRef.value) return;
   humChart = echarts.init(humChartRef.value);
   humChart.setOption({
+    animation: false,
     tooltip: { trigger: "axis" },
-    legend: { ...chartLegendSmall, data: ["湿度", "光照"] },
-    grid: { left: 42, right: 42, top: 6, bottom: 28, containLabel: true },
+    toolbox: {
+      right: 6,
+      top: 2,
+      itemSize: 14,
+      feature: {
+        dataZoom: {
+          yAxisIndex: false,
+          title: { zoom: "框选放大", back: "取消框选" },
+        },
+        restore: { title: "还原" },
+      },
+    },
+    legend: { ...chartLegendSmall, bottom: CH_LEGEND_BOTTOM, data: ["湿度", "光照"] },
+    grid: { left: 42, right: 42, top: 22, bottom: CH_GRID_BOTTOM, containLabel: true },
+    dataZoom: [
+      { type: "inside", xAxisIndex: 0, filterMode: "none" },
+      { type: "inside", yAxisIndex: 0, filterMode: "none" },
+      { type: "inside", yAxisIndex: 1, filterMode: "none" },
+      {
+        type: "slider",
+        xAxisIndex: 0,
+        filterMode: "none",
+        height: CH_SLIDER_H,
+        bottom: 2,
+        showDetail: false,
+      },
+    ],
     xAxis: { type: "time", axisLabel: { fontSize: 10 } },
     yAxis: [
       { type: "value", name: "%RH", position: "left", nameTextStyle: { fontSize: 10 }, axisLabel: { fontSize: 10 } },
       { type: "value", name: "lx", position: "right", nameTextStyle: { fontSize: 10 }, axisLabel: { fontSize: 10 } },
     ],
     series: [
-      { name: "湿度", type: "line", smooth: true, showSymbol: false, data: [], itemStyle: { color: "#409eff" } },
+      {
+        name: "湿度",
+        type: "line",
+        smooth: 0.35,
+        sampling: "lttb",
+        showSymbol: false,
+        data: [],
+        itemStyle: { color: "#409eff" },
+      },
       {
         name: "光照",
         type: "line",
-        smooth: true,
+        smooth: 0.35,
+        sampling: "lttb",
         showSymbol: false,
         yAxisIndex: 1,
         data: [],
@@ -454,38 +775,52 @@ function initHumChart() {
 
 function applyTempChart(tl) {
   if (!tempChart) return;
-  const actualData = tempRealtime.map((p) => [p.time_ms, p.value]);
+  const rawActual = tempRealtime.map((p) => [p.time_ms, p.value]);
+  const actualData = downsamplePairs(rawActual, MAX_CHART_POINTS);
   const ppSrc =
     displayPastPredicted.value?.length > 0
       ? displayPastPredicted.value
       : tl?.past_predicted || [];
-  const ppData = seriesFromPoints(ppSrc);
-  const fpData = tl ? seriesFromPoints(tl.future_predicted) : [];
+  const ppData = downsamplePairs(seriesFromPoints(ppSrc), MAX_CHART_POINTS);
+  const fpData = downsamplePairs(tl ? seriesFromPoints(tl.future_predicted) : [], MAX_CHART_POINTS);
   const band = tl?.future_band;
   let bandLow = [];
   let bandSpan = [];
   if (band?.length) {
-    bandLow = band.map((b) => [b.time_ms, b.low_c]);
-    bandSpan = band.map((b) => [b.time_ms, Math.max(0.02, b.high_c - b.low_c)]);
+    const low = band.map((b) => [b.time_ms, b.low_c]);
+    const span = band.map((b) => [b.time_ms, Math.max(0.02, b.high_c - b.low_c)]);
+    bandLow = downsamplePairs(low, MAX_CHART_POINTS);
+    bandSpan = downsamplePairs(span, MAX_CHART_POINTS);
   }
-  tempChart.setOption({
-    series: [
-      { data: actualData },
-      { data: ppData },
-      { data: fpData },
-      { data: bandLow },
-      { data: bandSpan },
-    ],
-  });
+  tempChart.setOption(
+    {
+      animation: false,
+      series: [
+        { data: actualData },
+        { data: ppData },
+        { data: fpData },
+        { data: bandLow },
+        { data: bandSpan },
+      ],
+    },
+    { lazyUpdate: true },
+  );
 }
 
 function applyHumChartRealtime() {
   if (!humChart) return;
-  const hData = humRealtime.map((p) => [p.time_ms, p.value]);
-  const lData = lightRealtime.map((p) => [p.time_ms, p.value]);
-  humChart.setOption({
-    series: [{ data: hData }, { data: lData }],
-  });
+  const hData = downsamplePairs(
+    humRealtime.map((p) => [p.time_ms, p.value]),
+    MAX_CHART_POINTS,
+  );
+  const lData = downsamplePairs(
+    lightRealtime.map((p) => [p.time_ms, p.value]),
+    MAX_CHART_POINTS,
+  );
+  humChart.setOption(
+    { animation: false, series: [{ data: hData }, { data: lData }] },
+    { lazyUpdate: true },
+  );
 }
 
 /* ---------- 数据获取 ---------- */
@@ -514,12 +849,8 @@ async function fetchTimeline({ fullReset = false } = {}) {
 }
 
 function normalizeSensorTimestampMs(ts) {
-  if (ts == null) return NaN;
-  if (typeof ts === "number") {
-    return ts < 1e12 ? ts * 1000 : ts;
-  }
-  const p = Date.parse(ts);
-  return Number.isNaN(p) ? NaN : p;
+  const ms = parseBackendInstant(ts);
+  return Number.isNaN(ms) ? NaN : ms;
 }
 
 async function loadHistoryIntoBuffers() {
@@ -541,6 +872,7 @@ async function loadHistoryIntoBuffers() {
       humRealtime.push({ time_ms: ms, value: d.humidity });
       lightRealtime.push({ time_ms: ms, value: d.light });
     });
+    maybeThinBuffers();
   } catch {
     /* 静默 */
   }
@@ -625,10 +957,8 @@ onMounted(async () => {
 
   // WebSocket 实时推送：更新指标卡片 + 追加曲线数据点
   ws.on("sensor_data", (payload) => {
-    const ts = typeof payload.timestamp === "number"
-      ? payload.timestamp
-      : Date.parse(payload.timestamp);
-    const ms = Number.isNaN(ts) ? Date.now() : (ts < 1e12 ? ts * 1000 : ts);
+    let ms = parseSensorPayloadTimestampMs(payload.timestamp);
+    if (Number.isNaN(ms)) ms = Date.now();
 
     latest.value = {
       device_id: payload.deviceId || payload.device_id || "—",
@@ -638,25 +968,25 @@ onMounted(async () => {
       timestamp: ms,
     };
 
-    // 追加到实时缓冲
-    tempRealtime.push({ time_ms: ms, value: payload.temperature });
-    humRealtime.push({ time_ms: ms, value: payload.humidity });
-    lightRealtime.push({ time_ms: ms, value: payload.light });
+    appendRealtimeTriplet(ms, payload.temperature, payload.humidity, payload.light);
 
     // 裁剪超过 2 小时的旧数据
     pruneOld(tempRealtime);
     pruneOld(humRealtime);
     pruneOld(lightRealtime);
+    maybeThinBuffers();
 
-    // 实时刷新曲线
-    applyTempChart(timeline.value);
-    applyHumChartRealtime();
+    scheduleRealtimeCharts();
   });
 
   window.addEventListener("resize", onResize);
 });
 
 onUnmounted(() => {
+  if (chartUpdateRaf) {
+    cancelAnimationFrame(chartUpdateRaf);
+    chartUpdateRaf = 0;
+  }
   if (pollTimer) clearInterval(pollTimer);
   window.removeEventListener("resize", onResize);
   tempChart?.dispose();
@@ -790,6 +1120,33 @@ onUnmounted(() => {
   align-items: baseline;
   gap: 6px;
 }
+.ch-hd-row {
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+.ch-hd-text {
+  display: flex;
+  align-items: baseline;
+  gap: 6px;
+  flex-wrap: wrap;
+  min-width: 0;
+}
+.ch-zoom-bar {
+  display: inline-flex;
+  align-items: center;
+  flex-shrink: 0;
+  gap: 0;
+}
+.ch-zoom-bar .ch-zoom-btn {
+  padding: 4px;
+  min-height: auto;
+  color: #606266;
+}
+.ch-zoom-bar .ch-zoom-btn:hover {
+  color: #409eff;
+}
 .ch-sub {
   font-size: 11px;
   font-weight: normal;
@@ -830,7 +1187,7 @@ onUnmounted(() => {
 .bc-row {
   display: flex;
   gap: 16px;
-  align-items: flex-start;
+  align-items: stretch;
 }
 .bc-content {
   flex: 1;
@@ -867,6 +1224,23 @@ onUnmounted(() => {
   color: #E6A23C;
   font-weight: 600;
 }
+.bc-anomaly-truncate-hint {
+  margin: 0;
+  font-size: 11px;
+  color: #909399;
+  line-height: 1.4;
+}
+.bc-anomaly-footer-row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px 16px;
+  margin-top: 6px;
+}
+.bc-anomaly-footer-row .bc-meta {
+  margin-left: auto;
+  margin-top: 0;
+}
 .bc-anomaly-list {
   display: flex;
   flex-wrap: wrap;
@@ -899,7 +1273,8 @@ onUnmounted(() => {
   display: flex;
   flex-direction: column;
   align-items: stretch;
-  gap: 8px;
+  align-self: stretch;
+  gap: 10px;
   flex-shrink: 0;
   min-width: 200px;
   width: 200px;
@@ -910,7 +1285,16 @@ onUnmounted(() => {
   box-sizing: border-box;
   box-shadow: 0 1px 4px rgba(0, 0, 0, 0.06);
 }
+.bc-tools-actions {
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  justify-content: space-evenly;
+  align-items: stretch;
+}
 .bc-tools-head {
+  flex-shrink: 0;
   font-size: 11px;
   font-weight: 700;
   color: #606266;
@@ -918,7 +1302,7 @@ onUnmounted(() => {
   text-align: center;
   padding-bottom: 2px;
   border-bottom: 1px solid #ebeef5;
-  margin-bottom: 2px;
+  margin-bottom: 0;
 }
 .bc-btn {
   width: 100%;
@@ -978,6 +1362,14 @@ onUnmounted(() => {
     text-align: left;
     margin-bottom: 0;
     padding-bottom: 6px;
+  }
+  .bc-tools-actions {
+    flex: 1 1 100%;
+    flex-direction: row;
+    flex-wrap: wrap;
+    justify-content: space-evenly;
+    align-items: center;
+    min-height: auto;
   }
   .bc-btn {
     flex: 1 1 148px;
