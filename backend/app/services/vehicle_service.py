@@ -1,5 +1,6 @@
 import json
 import logging
+from datetime import datetime, timezone
 
 from app.core.config import settings
 from app.core.mqtt import mqtt_client
@@ -16,6 +17,7 @@ class VehicleService:
 
     MVP：
     - send_control：写入（内存）控制结果 → 向 MQTT `car/control` 发布 JSON（与手册一致，QoS 1）→ 广播 `vehicle_status`
+    - send_track_mode：向 `car/control/track` 发布 ``{"mode","timestamp"}``（QoS 1），更新内存 ``drive_mode`` 并广播
     - send_gimbal_mqtt：向 `arm/control` 发布 joint 6、7（云台），QoS 1
     - send_arm_joints_mqtt：向 `arm/control` 发布 joint 0~5（机械臂），QoS 1
     - get_status：读取当前车辆状态
@@ -50,6 +52,42 @@ class VehicleService:
                 "type": "vehicle_status",
                 "payload": {
                     "mode": status.mode,
+                    "driveMode": status.drive_mode,
+                    "speed": status.speed,
+                    "leftSpeed": status.left_speed,
+                    "rightSpeed": status.right_speed,
+                    "connected": status.connected,
+                    "timestamp": ts_ms,
+                },
+                "timestamp": ts_ms,
+            }
+        )
+
+    async def send_track_mode(self, mode: str, timestamp: int | None = None) -> None:
+        track_topic = (settings.MQTT_TOPIC_CAR_TRACK or "").strip()
+        ts = int(timestamp) if timestamp is not None else int(datetime.now(timezone.utc).timestamp())
+        payload = json.dumps({"mode": mode, "timestamp": ts}, separators=(",", ":"))
+        if settings.MQTT_ENABLED:
+            if not track_topic:
+                raise RuntimeError("MQTT_TOPIC_CAR_TRACK 未配置")
+            try:
+                await mqtt_client.publish(track_topic, payload, qos=1)
+                logger.info("MQTT car/control/track published mode=%s ts=%s", mode, ts)
+            except Exception:
+                logger.exception("MQTT 发布循迹模式切换失败 topic=%s", track_topic)
+                raise
+        else:
+            logger.info("MQTT 未启用：仅更新内存 drive_mode=%s（不下发 car/control/track）", mode)
+
+        await self._repo.set_drive_mode(mode)
+        status = await self._repo.get_status()
+        ts_ms = int(status.timestamp.timestamp() * 1000)
+        await websocket_manager.broadcast(
+            {
+                "type": "vehicle_status",
+                "payload": {
+                    "mode": status.mode,
+                    "driveMode": status.drive_mode,
                     "speed": status.speed,
                     "leftSpeed": status.left_speed,
                     "rightSpeed": status.right_speed,

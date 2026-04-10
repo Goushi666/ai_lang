@@ -9,6 +9,7 @@ from app.schemas.vehicle import VehicleStatusResponse
 @dataclass
 class _VehicleStatus:
     mode: str
+    drive_mode: str
     speed: int
     left_speed: int
     right_speed: int
@@ -26,6 +27,7 @@ class VehicleRepository:
     def __init__(self) -> None:
         self._status = _VehicleStatus(
             mode="manual",
+            drive_mode="normal",
             speed=0,
             left_speed=0,
             right_speed=0,
@@ -39,6 +41,7 @@ class VehicleRepository:
         s = self._status
         return VehicleStatusResponse(
             mode=s.mode,  # type: ignore[arg-type]
+            drive_mode=s.drive_mode,  # type: ignore[arg-type]
             speed=s.speed,
             left_speed=s.left_speed,
             right_speed=s.right_speed,
@@ -81,4 +84,11 @@ class VehicleRepository:
                 self._status.right_speed = 0
 
         self._status.timestamp = now
+
+    async def set_drive_mode(self, drive_mode: str) -> None:
+        """normal | track；与 MQTT car/control/track 同步。"""
+        if drive_mode not in ("normal", "track"):
+            return
+        self._status.drive_mode = drive_mode
+        self._status.timestamp = datetime.utcnow()
 

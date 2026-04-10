@@ -9,13 +9,15 @@ class VehicleStatusResponse(BaseModel):
     车辆状态响应模型（MVP）。
 
     字段说明：
-    - mode：manual/auto
+    - mode：manual/auto（与 MQTT 车速反馈等一致）
+    - drive_mode：normal/track（Web 下发的循迹模式；track 时前端应锁定手动方向控制）
     - speed：总体速度（整数）
     - left_speed/right_speed：左右轮速度
     - connected：连接状态
     """
 
     mode: Literal["manual", "auto"]
+    drive_mode: Literal["normal", "track"] = "normal"
     speed: int
     left_speed: int
     right_speed: int
@@ -78,6 +80,15 @@ class ArmJointsControlRequest(BaseModel):
         if sp and n == 0:
             raise ValueError("仅调整 speed 时请同时提供 joint_0_angle～joint_5_angle")
         return self
+
+
+class TrackModeRequest(BaseModel):
+    """
+    MQTT `car/control/track` 与手册 §3.4 对齐：切换普通 / 循迹模式。
+    """
+
+    mode: Literal["normal", "track"]
+    timestamp: Optional[int] = Field(default=None, description="Unix 秒；缺省由后端填充")
 
 
 class VehicleControlRequest(BaseModel):

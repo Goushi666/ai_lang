@@ -93,10 +93,32 @@
                   {{ status.mode === "auto" ? "自动循迹" : "手动控制" }}
                 </el-tag>
               </el-descriptions-item>
+              <el-descriptions-item label="行驶策略">
+                <el-tag :type="status.drive_mode === 'track' ? 'warning' : 'success'" size="small">
+                  {{ status.drive_mode === "track" ? "循迹（已锁遥控）" : "普通" }}
+                </el-tag>
+              </el-descriptions-item>
               <el-descriptions-item label="当前速度">{{ status.speed }}</el-descriptions-item>
               <el-descriptions-item label="左轮速度">{{ status.left_speed ?? 0 }}</el-descriptions-item>
               <el-descriptions-item label="右轮速度">{{ status.right_speed ?? 0 }}</el-descriptions-item>
             </el-descriptions>
+            <div v-if="status" class="drive-mode-actions">
+              <el-text type="info" size="small" class="drive-mode-hint">MQTT「car/control/track」</el-text>
+              <el-button-group size="small">
+                <el-button
+                  :type="(status.drive_mode || 'normal') !== 'track' ? 'primary' : 'default'"
+                  @click="setDriveMode('normal')"
+                >
+                  普通模式
+                </el-button>
+                <el-button
+                  :type="status.drive_mode === 'track' ? 'primary' : 'default'"
+                  @click="setDriveMode('track')"
+                >
+                  循迹模式
+                </el-button>
+              </el-button-group>
+            </div>
             <el-skeleton :rows="4" v-else animated />
           </el-card>
         </div>
@@ -107,27 +129,57 @@
               <template #header>
                 <div class="card-head-stack">
                   <span class="card-head">云台</span>
-                  <el-text type="info" size="small">松手后下发；拖哪条只发该条（转速条会带当前两关节角）</el-text>
+                  <el-text type="info" size="small">
+                    {{
+                      trackModeLocked
+                        ? "循迹中：云台由车端固定位姿，已锁定。"
+                        : "松手后下发；拖哪条只发该条（转速条会带当前两关节角）"
+                    }}
+                  </el-text>
                 </div>
               </template>
               <div class="param-row">
                 <span class="param-row-label">关节 6</span>
                 <div class="param-row-slider">
-                  <el-slider v-model="gimbalJ6" :min="0" :max="180" :step="1" size="small" @change="onGimbalJ6Change" />
+                  <el-slider
+                    v-model="gimbalJ6"
+                    :min="0"
+                    :max="180"
+                    :step="1"
+                    size="small"
+                    :disabled="trackModeLocked"
+                    @change="onGimbalJ6Change"
+                  />
                 </div>
                 <span class="param-row-val">{{ gimbalJ6 }}°</span>
               </div>
               <div class="param-row">
                 <span class="param-row-label">关节 7</span>
                 <div class="param-row-slider">
-                  <el-slider v-model="gimbalJ7" :min="0" :max="90" :step="1" size="small" @change="onGimbalJ7Change" />
+                  <el-slider
+                    v-model="gimbalJ7"
+                    :min="0"
+                    :max="90"
+                    :step="1"
+                    size="small"
+                    :disabled="trackModeLocked"
+                    @change="onGimbalJ7Change"
+                  />
                 </div>
                 <span class="param-row-val">{{ gimbalJ7 }}°</span>
               </div>
               <div class="param-row">
                 <span class="param-row-label">云台转速</span>
                 <div class="param-row-slider">
-                  <el-slider v-model="gimbalSpeed" :min="0" :max="100" :step="5" size="small" @change="onGimbalSpeedChange" />
+                  <el-slider
+                    v-model="gimbalSpeed"
+                    :min="0"
+                    :max="100"
+                    :step="5"
+                    size="small"
+                    :disabled="trackModeLocked"
+                    @change="onGimbalSpeedChange"
+                  />
                 </div>
                 <span class="param-row-val">{{ gimbalSpeed }}</span>
               </div>
@@ -141,7 +193,9 @@
                     <el-text type="info" size="small">
                       {{
                         controlPanelMode === "vehicle"
-                          ? "方向：W/A/S/D、空格停"
+                          ? trackModeLocked
+                            ? "循迹中：方向键与本面板已锁定，请先切回「普通模式」。"
+                            : "方向：W/A/S/D、空格停"
                           : "机械臂：松手后下发；拖哪个关节只发该关节（转速条会带齐 6 角）"
                       }}
                     </el-text>
@@ -157,7 +211,7 @@
                 <div class="param-row vehicle-speed-row">
                   <span class="param-row-label">行驶速度</span>
                   <div class="param-row-slider">
-                    <el-slider v-model="speed" :min="0" :max="100" :step="5" size="small" />
+                    <el-slider v-model="speed" :min="0" :max="100" :step="5" size="small" :disabled="trackModeLocked" />
                   </div>
                   <span class="param-row-val">{{ speed }}</span>
                 </div>
@@ -166,7 +220,7 @@
                     <div class="dpad-row">
                       <div class="dpad-cell"></div>
                       <div class="dpad-cell">
-                        <el-button type="primary" class="dpad-btn" @click="send('forward')">
+                        <el-button type="primary" class="dpad-btn" :disabled="trackModeLocked" @click="send('forward')">
                           <el-icon :size="20"><Top /></el-icon>
                           <div class="dpad-label">前进</div>
                         </el-button>
@@ -175,19 +229,19 @@
                     </div>
                     <div class="dpad-row">
                       <div class="dpad-cell">
-                        <el-button type="primary" class="dpad-btn" @click="send('left')">
+                        <el-button type="primary" class="dpad-btn" :disabled="trackModeLocked" @click="send('left')">
                           <el-icon :size="20"><Back /></el-icon>
                           <div class="dpad-label">左转</div>
                         </el-button>
                       </div>
                       <div class="dpad-cell">
-                        <el-button type="warning" class="dpad-btn stop-btn" @click="send('stop')">
+                        <el-button type="warning" class="dpad-btn stop-btn" :disabled="trackModeLocked" @click="send('stop')">
                           <el-icon :size="20"><VideoPause /></el-icon>
                           <div class="dpad-label">停止</div>
                         </el-button>
                       </div>
                       <div class="dpad-cell">
-                        <el-button type="primary" class="dpad-btn" @click="send('right')">
+                        <el-button type="primary" class="dpad-btn" :disabled="trackModeLocked" @click="send('right')">
                           <el-icon :size="20"><Right /></el-icon>
                           <div class="dpad-label">右转</div>
                         </el-button>
@@ -196,7 +250,7 @@
                     <div class="dpad-row">
                       <div class="dpad-cell"></div>
                       <div class="dpad-cell">
-                        <el-button type="primary" class="dpad-btn" @click="send('backward')">
+                        <el-button type="primary" class="dpad-btn" :disabled="trackModeLocked" @click="send('backward')">
                           <el-icon :size="20"><Bottom /></el-icon>
                           <div class="dpad-label">后退</div>
                         </el-button>
@@ -246,7 +300,7 @@
 </template>
 
 <script setup>
-import { inject, nextTick, onMounted, onUnmounted, ref } from "vue";
+import { computed, inject, nextTick, onMounted, onUnmounted, ref } from "vue";
 import { ElMessage } from "element-plus";
 import { VideoCamera, Top, Bottom, Back, Right, VideoPause } from "@element-plus/icons-vue";
 import Hls from "hls.js";
@@ -257,6 +311,9 @@ import { pickHlsPlaylistUrl, pickMjpegFeedUrl, toAbsoluteMediaUrl } from "../uti
 const ws = inject("ws");
 const status = ref(null);
 const speed = ref(50);
+
+/** 循迹模式：锁定车体遥控、云台关节 6/7（与手册 car/control、车端云台策略一致） */
+const trackModeLocked = computed(() => (status.value?.drive_mode || "normal") === "track");
 
 const gimbalJ6 = ref(90);
 const gimbalJ7 = ref(60);
@@ -275,6 +332,10 @@ function setArmAngle(index, value) {
 }
 
 async function sendGimbalPartial(body) {
+  if (trackModeLocked.value) {
+    ElMessage.warning("循迹模式中云台已锁定，请先切回「普通模式」");
+    return;
+  }
   try {
     await vehicleApi.sendGimbal(body);
   } catch (e) {
@@ -410,7 +471,31 @@ async function refreshStatus() {
   }
 }
 
+async function setDriveMode(mode) {
+  const cur = status.value?.drive_mode || "normal";
+  if (cur === mode) return;
+  try {
+    await vehicleApi.sendTrackMode({
+      mode,
+      timestamp: Math.floor(Date.now() / 1000),
+    });
+    ElMessage.success(
+      mode === "track"
+        ? "已下发循迹模式：车体遥控与云台已锁定"
+        : "已切回普通模式，可使用键盘、面板与云台",
+    );
+    await refreshStatus();
+  } catch (e) {
+    const msg = e?.response?.data?.detail;
+    ElMessage.error(typeof msg === "string" ? msg : "模式切换失败，请确认 MQTT 与 Topic 配置");
+  }
+}
+
 async function send(action) {
+  if (trackModeLocked.value) {
+    ElMessage.warning("循迹模式中已锁定手动控制，请先切回「普通模式」");
+    return;
+  }
   await vehicleApi.sendControl({
     action,
     speed: speed.value,
@@ -420,6 +505,7 @@ async function send(action) {
 }
 
 function handleKeydown(e) {
+  if (trackModeLocked.value) return;
   if (controlPanelMode.value !== "vehicle") return;
   const map = { w: "forward", s: "backward", a: "left", d: "right", " ": "stop" };
   const action = map[e.key.toLowerCase()];
@@ -438,6 +524,7 @@ onMounted(async () => {
     status.value = {
       ...(status.value || {}),
       mode: payload.mode || "manual",
+      drive_mode: payload.driveMode ?? payload.drive_mode ?? status.value?.drive_mode ?? "normal",
       speed: payload.speed ?? 0,
       connected: payload.connected ?? true,
       left_speed: payload.leftSpeed ?? payload.left_speed ?? 0,
@@ -665,6 +752,20 @@ onUnmounted(() => {
 .status-desc :deep(.el-descriptions__content) {
   padding: 6px 10px !important;
   font-size: 12px;
+}
+
+.drive-mode-actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+  margin-top: 8px;
+  padding-top: 8px;
+  border-top: 1px solid var(--el-border-color-lighter);
+}
+.drive-mode-hint {
+  flex: 1 1 auto;
+  min-width: 0;
 }
 
 .speed-gimbal-card {
