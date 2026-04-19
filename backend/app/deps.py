@@ -9,6 +9,8 @@ from typing import Optional
 
 from fastapi import Depends, HTTPException, Request
 
+from app.services.knowledge import KnowledgeService
+
 from app.core.config import settings
 from app.core.security import get_optional_current_user
 from app.services.agent import AgentService
@@ -63,4 +65,14 @@ def optional_user_dep(request: Request) -> Optional[str]:
     # MVP：token 缺失/无效不强制拦截
     # 返回值：None 或 user_id（当前实现里用 payload 的 sub/user 字段）
     return get_optional_current_user(request)
+
+
+def knowledge_service_dep(request: Request) -> KnowledgeService:
+    svc = getattr(request.app.state, "knowledge_service", None)
+    if svc is None:
+        raise HTTPException(
+            status_code=503,
+            detail="知识库未初始化：请查看后端启动日志（KnowledgeService 构造失败）",
+        )
+    return svc
 

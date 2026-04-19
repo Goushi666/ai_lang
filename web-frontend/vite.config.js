@@ -24,6 +24,15 @@ export default defineConfig(({ mode }) => {
         "/api": {
           target: backend,
           changeOrigin: true,
+          timeout: 600_000,
+          proxyTimeout: 600_000,
+          configure: (proxy) => {
+            proxy.on("proxyRes", (proxyRes, req) => {
+              if (String(req.url || "").includes("chat/stream")) {
+                delete proxyRes.headers["content-length"];
+              }
+            });
+          },
         },
         "/ws": {
           target: backend,

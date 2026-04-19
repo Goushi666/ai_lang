@@ -103,7 +103,13 @@ class Settings(BaseSettings):
     # 已废弃：保留以兼容旧 .env，不再读取
     AGENT_STREAM_RAW: bool = False
     AGENT_STREAM_SIMULATE_CHAR_DELAY_MS: int = 12
+    # 流式 SSE：上游常一次推多字。>0 时在服务端把每条 delta 再拆成最多 N 字/码点一段再推送（1≈逐字）；0=不拆
+    AGENT_STREAM_UI_CHUNK_SIZE: int = 1
+    # 每拆一段后 await asyncio.sleep(0)，让出事件循环便于把数据刷到客户端（关闭则仍可能整批缓冲）
+    AGENT_STREAM_YIELD_TO_LOOP: bool = True
     VECTOR_DB_PATH: str = "./data/vector_db"
+    # 知识库（SQLite FTS5）文件路径；与旧 Chroma 目录 VECTOR_DB_PATH 无关
+    KNOWLEDGE_SQLITE_PATH: str = "./data/knowledge_fts.db"
     EMBEDDING_MODEL: str = "BAAI/bge-large-zh-v1.5"
     EMBEDDING_BATCH_SIZE: int = 16
     RAG_CHUNK_SIZE: int = 500

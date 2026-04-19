@@ -43,6 +43,7 @@ from app.services.agent.tools import ToolRegistry
 from app.services.agent.tools.sensor_tools import GetSensorLatest, GetSensorHistory
 from app.services.agent.tools.alarm_tools import GetAlarmsHistory, GetAlarmConfig
 from app.services.agent.tools.analysis_tools import GetEnvironmentAnalysis
+from app.services.agent.tools.knowledge_tools import SearchKnowledgeBase
 from app.services.agent.skills import SkillRegistry
 from app.services.agent.skills.env_diagnosis import EnvDiagnosisSkill
 from app.services.agent.llm import LLMClient
@@ -149,6 +150,24 @@ def create_app() -> FastAPI:
             from app.services.analysis_service import AnalysisService as _AS
             _analysis_svc = _AS(sensor_repo=sensor_repo, alarm_service=alarm_service)
             tool_registry.register(GetEnvironmentAnalysis(_analysis_svc))
+
+        app.state.knowledge_service = None
+        try:
+            from app.services.knowledge import KnowledgeService as _KnowledgeService
+
+            _ks = _KnowledgeService(settings)
+            app.state.knowledge_service = _ks
+            if settings.AGENT_RAG_ENABLED:
+                tool_registry.register(
+                    SearchKnowledgeBase(_ks, top_k=settings.AGENT_RAG_TOP_K),
+                )
+            logger.info(
+                "知识库已初始化(FTS) path=%s rag_tool=%s",
+                _ks.db_path,
+                settings.AGENT_RAG_ENABLED,
+            )
+        except Exception:
+            logger.exception("知识库初始化失败，入库 API 与 RAG 检索将不可用")
 
         skill_registry = SkillRegistry()
         skill_registry.register(EnvDiagnosisSkill())

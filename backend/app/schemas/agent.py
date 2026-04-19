@@ -48,6 +48,10 @@ class ChatResponse(BaseModel):
     )
     sources: List[Dict[str, Any]] = Field(default_factory=list)
     usage: Optional[Dict[str, int]] = None
+    conversation_title: Optional[str] = Field(
+        None,
+        description="服务端根据首轮用户+助手对答归纳的会话标题（若有）",
+    )
 
 
 # ------------------------------------------------------------------
@@ -82,16 +86,23 @@ class SessionListResponse(BaseModel):
 
 
 # ------------------------------------------------------------------
-# 知识库管理（P0 基础接口，实现待后续）
+# 知识库管理（SQLite FTS5 + 入库 API）
 # ------------------------------------------------------------------
 
 class KnowledgeIngestRequest(BaseModel):
-    file_path: Optional[str] = Field(None, description="服务端文档路径")
+    file_path: Optional[str] = Field(None, description="服务端文档路径（相对 backend 根或绝对路径）")
     content: Optional[str] = Field(None, description="直接传入文本内容")
-    doc_type: str = Field("markdown", description="文档类型：markdown | pdf | txt")
+    source_id: Optional[str] = Field(
+        None,
+        description="入库文档标识，删除接口用；文本入库时必填或自动生成",
+    )
+    replace: bool = Field(True, description="是否先删除同 source 的旧块再写入")
+    doc_type: str = Field("markdown", description="预留：markdown | txt")
 
 
 class KnowledgeStatusResponse(BaseModel):
     total_documents: int = 0
     total_chunks: int = 0
     status: str = "not_initialized"
+    collection: Optional[str] = None
+    db_path: Optional[str] = None

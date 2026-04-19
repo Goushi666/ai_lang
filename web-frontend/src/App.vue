@@ -223,11 +223,13 @@ html, body, #app {
   flex-direction: column;
 }
 
+/* 智能助手：主内容区不整体滚动，由页内消息列表单独滚动 */
 .app-main--agent {
   overflow: hidden;
+  padding: 16px 20px 20px;
   display: flex;
   flex-direction: column;
-  padding: 12px 16px;
+  min-height: 0;
 }
 
 .app-main--agent .agent-page {
@@ -236,6 +238,7 @@ html, body, #app {
   min-width: 0;
   display: flex;
   flex-direction: column;
+  overflow: hidden;
 }
 
 /* 巡检页根节点参与 flex 高度链，使主区域占满且不撑出滚动条 */

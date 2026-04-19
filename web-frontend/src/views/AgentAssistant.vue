@@ -1,5 +1,5 @@
 <template>
-  <div class="agent-page">
+  <div class="agent-page app-main-route--agent">
     <div class="agent-header">
       <div class="agent-header-row">
         <h2 class="page-title">智能助手</h2>
@@ -124,12 +124,6 @@ function makeId() {
     : `c-${Date.now()}-${Math.random().toString(36).slice(2, 9)}`;
 }
 
-function truncateTitle(text) {
-  const t = (text || "").trim().replace(/\s+/g, " ");
-  if (!t) return "新对话";
-  return t.length > 22 ? `${t.slice(0, 22)}…` : t;
-}
-
 function loadPersisted() {
   try {
     const raw = localStorage.getItem(STORAGE_KEY);
@@ -162,7 +156,15 @@ const sending = ref(false);
 const listRef = ref(null);
 const clarificationOptions = ref([]);
 
+/** 流式时仅改 messages 内对象字段不会使「只读 c.messages 引用」的 computed 失效，用 epoch 强制刷新列表 */
+const messageStreamEpoch = ref(0);
+
+function bumpMessageStreamView() {
+  messageStreamEpoch.value += 1;
+}
+
 const messages = computed(() => {
+  messageStreamEpoch.value;
   const c = conversations.value.find((x) => x.id === activeId.value);
   return c ? c.messages : defaultMessages();
 });
@@ -176,17 +178,27 @@ function touchActive() {
   if (c) c.updatedAt = Date.now();
 }
 
-function maybeSetTitleFromFirstUser(userText) {
-  const c = conversations.value.find((x) => x.id === activeId.value);
-  if (!c) return;
-  const hasUser = c.messages.some((m) => m.role === "user");
-  if (!hasUser && userText) c.title = truncateTitle(userText);
+/** 服务端首轮对答归纳的会话标题（SSE done / chat 响应） */
+function applyConversationTitle(conv, title) {
+  if (!conv || !title || typeof title !== "string") return;
+  const t = title.trim();
+  if (!t) return;
+  conv.title = t.length > 28 ? `${t.slice(0, 28)}…` : t;
+}
+
+function scrollMessagesToEnd(smooth) {
+  const el = listRef.value;
+  if (!el) return;
+  const top = el.scrollHeight;
+  if (smooth) {
+    el.scrollTo({ top, behavior: "smooth" });
+  } else {
+    el.scrollTop = top;
+  }
 }
 
 function scrollToBottom() {
-  nextTick(() => {
-    listRef.value?.scrollTo?.({ top: listRef.value.scrollHeight, behavior: "smooth" });
-  });
+  nextTick(() => scrollMessagesToEnd(true));
 }
 
 let scrollRaf = 0;
@@ -194,7 +206,7 @@ function scrollToBottomThrottled() {
   if (scrollRaf) return;
   scrollRaf = requestAnimationFrame(() => {
     scrollRaf = 0;
-    listRef.value?.scrollTo?.({ top: listRef.value.scrollHeight, behavior: "auto" });
+    scrollMessagesToEnd(false);
   });
 }
 
@@ -377,7 +389,6 @@ async function send() {
   if (!c) return;
 
   c.messages = [...c.messages, { role: "user", content: text }];
-  maybeSetTitleFromFirstUser(text);
   input.value = "";
   sending.value = true;
   clarificationOptions.value = [];
@@ -423,6 +434,7 @@ async function send() {
             label: o.label,
             value: o.value,
           }));
+          bumpMessageStreamView();
           touchActive();
           persistState(conversations.value, activeId.value, chatMode.value);
           return;
@@ -430,6 +442,7 @@ async function send() {
         if (ev.type === "delta") {
           if (ev.reasoning) asst.reasoning += ev.reasoning;
           if (ev.content) asst.content += ev.content;
+          bumpMessageStreamView();
           scrollToBottomThrottled();
           return;
         }
@@ -438,6 +451,10 @@ async function send() {
           if (ev.session_id) applyServerSessionId(c, ev.session_id);
           if (ev.reasoning != null && ev.reasoning !== "") asst.reasoning = ev.reasoning;
           if (ev.content != null && ev.content !== "") asst.content = ev.content;
+          if (ev.conversation_title != null && String(ev.conversation_title).trim() !== "") {
+            applyConversationTitle(c, ev.conversation_title);
+          }
+          bumpMessageStreamView();
           touchActive();
           persistState(conversations.value, activeId.value, chatMode.value);
         }
@@ -453,6 +470,9 @@ async function send() {
       asst.content = res.content || "";
       asst.reasoning = res.reasoning || "";
       asst.streaming = false;
+      if (res.conversation_title != null && String(res.conversation_title).trim() !== "") {
+        applyConversationTitle(c, res.conversation_title);
+      }
       if (res.clarification?.options?.length) {
         clarificationOptions.value = res.clarification.options;
       } else {
@@ -595,7 +615,9 @@ onMounted(async () => {
 .messages {
   flex: 1;
   min-height: 0;
-  overflow-y: auto;
+  overflow-y: scroll;
+  overflow-x: hidden;
+  scrollbar-gutter: stable;
   padding: 16px 18px 8px;
 }
 .composer {

@@ -97,6 +97,7 @@ class LLMClient:
         self,
         messages: List[Dict[str, Any]],
         tools: Optional[List[Dict[str, Any]]] = None,
+        max_tokens: Optional[int] = None,
     ) -> LLMResponse:
         """
         非流式调用 /chat/completions。
@@ -118,6 +119,8 @@ class LLMClient:
         }
         if tools:
             body["tools"] = tools
+        if max_tokens is not None:
+            body["max_tokens"] = max_tokens
 
         resp = await client.post("chat/completions", json=body)
         resp.raise_for_status()

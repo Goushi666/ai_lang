@@ -1,9 +1,32 @@
 import request from "@/utils/request";
+import { nextTick } from "vue";
 
 const jsonHeaders = {
   "Content-Type": "application/json",
   Accept: "application/json",
 };
+
+/**
+ * 将 delta 按字（Unicode 码点）拆开，每步 onEvent + nextTick，配合页面侧 bump 触发列表重渲染。
+ */
+async function emitDeltaInChunks(onEvent, ev) {
+  const reasoning = ev.reasoning || "";
+  const content = ev.content || "";
+  if (!reasoning && !content) {
+    onEvent(ev);
+    await nextTick();
+    return;
+  }
+  const pushByChar = async (field, text) => {
+    if (!text) return;
+    for (const ch of text) {
+      onEvent(field === "reasoning" ? { type: "delta", reasoning: ch } : { type: "delta", content: ch });
+      await nextTick();
+    }
+  };
+  await pushByChar("reasoning", reasoning);
+  await pushByChar("content", content);
+}
 
 /**
  * SSE：`data:` 每行为 JSON，见后端 `/api/agent/chat/stream`
@@ -44,12 +67,19 @@ export async function agentChatStream(body, onEvent, signal) {
     while ((idx = buffer.indexOf("\n\n")) >= 0) {
       const block = buffer.slice(0, idx);
       buffer = buffer.slice(idx + 2);
-      for (const line of block.split("\n")) {
+      const norm = block.replace(/\r\n/g, "\n").replace(/\r/g, "\n");
+      for (const line of norm.split("\n")) {
         if (!line.startsWith("data:")) continue;
         const raw = line.slice(5).trimStart();
         if (!raw) continue;
         try {
-          onEvent(JSON.parse(raw));
+          const ev = JSON.parse(raw);
+          if (ev.type === "delta") {
+            await emitDeltaInChunks(onEvent, ev);
+          } else {
+            onEvent(ev);
+            await nextTick();
+          }
         } catch {
           /* skip malformed */
         }

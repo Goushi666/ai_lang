@@ -56,19 +56,32 @@ class AgentChatRepository:
             await sess.commit()
         return True
 
-    async def persist_session_snapshot(self, session: Session, title: Optional[str] = None) -> None:
-        """用当前内存会话覆盖 SQLite 中同 ID 记录。"""
+    async def persist_session_snapshot(
+        self,
+        session: Session,
+        title: Optional[str] = None,
+        *,
+        infer_title_from_messages: bool = True,
+    ) -> str:
+        """用当前内存会话覆盖 SQLite 中同 ID 记录。返回最终写入的标题。"""
         now = datetime.utcnow()
         async with self._session_factory() as sess:
             conv = await sess.get(AgentConversation, session.id)
             t = title
-            if not t:
+            can_infer_user = conv is None or not (
+                conv.title and conv.title.strip() and conv.title != "新对话"
+            )
+            if not t and infer_title_from_messages and can_infer_user:
                 for m in session.messages:
                     if m.role == "user" and m.content.strip():
-                        t = (m.content.strip()[:80] + ("…" if len(m.content.strip()) > 80 else ""))
+                        raw = m.content.strip()
+                        t = raw[:80] + ("…" if len(raw) > 80 else "")
                         break
             if not t:
-                t = "新对话"
+                if conv is not None and conv.title:
+                    t = conv.title
+                else:
+                    t = "新对话"
             if conv is None:
                 conv = AgentConversation(
                     id=session.id,
@@ -99,6 +112,7 @@ class AgentChatRepository:
                     )
                 )
             await sess.commit()
+        return t
 
     async def load_session(self, conversation_id: str) -> Optional[Session]:
         """从库组装 Session（仅 user/assistant/system，供恢复上下文）。"""
@@ -137,5 +151,6 @@ class AgentChatRepository:
             messages=msgs,
             created_at=_dt_to_ts(conv.created_at) or time.time(),
             updated_at=_dt_to_ts(conv.updated_at) or time.time(),
+            conversation_title_done=True,
         )
         return s

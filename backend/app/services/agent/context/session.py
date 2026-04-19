@@ -30,6 +30,8 @@ class Session:
     mode: str = "general"  # general | rag
     created_at: float = field(default_factory=time.time)
     updated_at: float = field(default_factory=time.time)
+    # 首轮 user+assistant 后是否已跑过自动标题（成功或失败均置 True，避免每轮调 LLM）
+    conversation_title_done: bool = False
 
     def add_message(self, msg: Message, max_messages: int = 50) -> None:
         self.messages.append(msg)

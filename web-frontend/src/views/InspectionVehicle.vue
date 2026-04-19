@@ -129,13 +129,7 @@
               <template #header>
                 <div class="card-head-stack">
                   <span class="card-head">云台</span>
-                  <el-text type="info" size="small">
-                    {{
-                      trackModeLocked
-                        ? "循迹中：云台由车端固定位姿，已锁定。"
-                        : "松手后下发；拖哪条只发该条（转速条会带当前两关节角）"
-                    }}
-                  </el-text>
+                  
                 </div>
               </template>
               <div class="param-row">
@@ -196,7 +190,7 @@
                           ? trackModeLocked
                             ? "循迹中：方向键与本面板已锁定，请先切回「普通模式」。"
                             : "方向：W/A/S/D、空格停"
-                          : "机械臂：松手后下发；拖哪个关节只发该关节（转速条会带齐 6 角）"
+                          : "机械臂：松手后下发"
                       }}
                     </el-text>
                   </div>
