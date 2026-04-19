@@ -50,6 +50,7 @@
         :class="{
           'app-main--dashboard': route.path === '/',
           'app-main--inspection': route.path === '/inspection',
+          'app-main--agent': route.path === '/agent',
         }"
       >
         <router-view :class="{ 'app-main-route--fill': route.path === '/inspection' }" />
@@ -218,6 +219,21 @@ html, body, #app {
 .app-main--inspection {
   overflow: hidden;
   padding: 10px 12px;
+  display: flex;
+  flex-direction: column;
+}
+
+.app-main--agent {
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
+  padding: 12px 16px;
+}
+
+.app-main--agent .agent-page {
+  flex: 1;
+  min-height: 0;
+  min-width: 0;
   display: flex;
   flex-direction: column;
 }

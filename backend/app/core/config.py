@@ -17,7 +17,8 @@ _BACKEND_ROOT = Path(__file__).resolve().parent.parent.parent
 
 class Settings(BaseSettings):
     model_config = SettingsConfigDict(
-        env_file=".env",
+        # 使用 backend 根下的 .env，避免从仓库根目录启动时读不到配置（相对 cwd 的 ".env" 会失效）
+        env_file=str(_BACKEND_ROOT / ".env"),
         env_file_encoding="utf-8",
         extra="ignore",
     )
@@ -86,7 +87,27 @@ class Settings(BaseSettings):
     FORECAST_LSTM_MODEL_PATH: str = "trained_models/lstm_temp.pth"
     FORECAST_LSTM_WINDOW_HOURS: int = 6
 
+    # --- 智能 Agent / LLM ---
     AGENT_ENABLED: bool = True
+    LLM_API_KEY: str = ""
+    LLM_BASE_URL: str = ""
+    LLM_MODEL: str = ""
+    AGENT_MAX_TOOL_ROUNDS: int = 10
+    AGENT_SESSION_TTL: int = 3600
+    AGENT_SESSION_MAX_MESSAGES: int = 50
+    AGENT_RAG_ENABLED: bool = True
+    AGENT_RAG_TOP_K: int = 5
+    AGENT_CLARIFICATION_ENABLED: bool = True
+    # True：SSE 使用单次流式 chat/completions，token 随上游到达；False：整段生成后再一次性返回（无 delta）
+    AGENT_STREAM_ENABLED: bool = True
+    # 已废弃：保留以兼容旧 .env，不再读取
+    AGENT_STREAM_RAW: bool = False
+    AGENT_STREAM_SIMULATE_CHAR_DELAY_MS: int = 12
+    VECTOR_DB_PATH: str = "./data/vector_db"
+    EMBEDDING_MODEL: str = "BAAI/bge-large-zh-v1.5"
+    EMBEDDING_BATCH_SIZE: int = 16
+    RAG_CHUNK_SIZE: int = 500
+    RAG_CHUNK_OVERLAP: int = 80
 
     # --- 车载视频（车机 URL、是否代理均在 .env）---
     VIDEO_MJPEG_URL: str = ""

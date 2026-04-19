@@ -26,6 +26,7 @@ from app.api.v1.devices import router as devices_router
 from app.api.v1.video import router as video_router
 from app.middleware.cors import cors_middleware
 from app.websocket.manager import websocket_manager
+from app.repositories.agent_chat_repo import AgentChatRepository
 from app.repositories.alarm_repo import AlarmRepository
 from app.repositories.environment_anomaly_repo import EnvironmentAnomalyRepository
 from app.repositories.sensor_repo import SensorRepository
@@ -36,6 +37,16 @@ from app.services.vehicle_service import VehicleService
 from app.core.config import settings
 from app.core.database import dispose_db, get_session_factory, init_db
 from app.core.mqtt import mqtt_client, parse_json_payload
+from app.services.agent import AgentService
+from app.services.agent.context import SessionManager
+from app.services.agent.tools import ToolRegistry
+from app.services.agent.tools.sensor_tools import GetSensorLatest, GetSensorHistory
+from app.services.agent.tools.alarm_tools import GetAlarmsHistory, GetAlarmConfig
+from app.services.agent.tools.analysis_tools import GetEnvironmentAnalysis
+from app.services.agent.skills import SkillRegistry
+from app.services.agent.skills.env_diagnosis import EnvDiagnosisSkill
+from app.services.agent.llm import LLMClient
+from app.services.agent.clarifier import Clarifier
 
 logger = logging.getLogger(__name__)
 
@@ -103,6 +114,8 @@ def create_app() -> FastAPI:
         """
         await init_db()
         session_factory = get_session_factory()
+        agent_chat_repo = AgentChatRepository(session_factory)
+        app.state.agent_chat_repo = agent_chat_repo
         sensor_repo = SensorRepository(session_factory)
         app.state.sensor_repo = sensor_repo
         env_anomaly_repo = EnvironmentAnomalyRepository(session_factory)
@@ -119,6 +132,43 @@ def create_app() -> FastAPI:
         vehicle_repo = VehicleRepository()
         app.state.vehicle_repo = vehicle_repo
         app.state.vehicle_service = VehicleService(repo=vehicle_repo)
+
+        # ---------- 智能 Agent 初始化 ----------
+        session_manager = SessionManager(
+            max_sessions=200,
+            ttl=settings.AGENT_SESSION_TTL,
+            max_messages=settings.AGENT_SESSION_MAX_MESSAGES,
+        )
+        tool_registry = ToolRegistry()
+        tool_registry.register(GetSensorLatest(sensor_service))
+        tool_registry.register(GetSensorHistory(sensor_service))
+        tool_registry.register(GetAlarmsHistory(alarm_repo))
+        tool_registry.register(GetAlarmConfig(alarm_repo))
+        # AnalysisService 需要 sensor_repo + alarm_service；按需构建（复用 analysis_service_dep 的模式）
+        if settings.ANALYSIS_ENABLED:
+            from app.services.analysis_service import AnalysisService as _AS
+            _analysis_svc = _AS(sensor_repo=sensor_repo, alarm_service=alarm_service)
+            tool_registry.register(GetEnvironmentAnalysis(_analysis_svc))
+
+        skill_registry = SkillRegistry()
+        skill_registry.register(EnvDiagnosisSkill())
+
+        llm_client = LLMClient(
+            api_key=settings.LLM_API_KEY,
+            base_url=settings.LLM_BASE_URL,
+            model=settings.LLM_MODEL,
+        )
+        clarifier = Clarifier(enabled=settings.AGENT_CLARIFICATION_ENABLED)
+
+        app.state.agent_service = AgentService(
+            session_manager=session_manager,
+            tool_registry=tool_registry,
+            skill_registry=skill_registry,
+            llm_client=llm_client,
+            clarifier=clarifier,
+            max_tool_rounds=settings.AGENT_MAX_TOOL_ROUNDS,
+            chat_repo=agent_chat_repo,
+        )
 
         # ---------- MQTT 接入（sensor/data 等，见 settings.MQTT_SUBSCRIBE_TOPICS）----------
         def on_mqtt_message(topic: str, payload: str) -> None:
@@ -201,6 +251,10 @@ def create_app() -> FastAPI:
                 task.cancel()
         if settings.MQTT_ENABLED:
             await mqtt_client.stop()
+        # 关闭 LLM httpx 客户端
+        agent_svc = getattr(app.state, "agent_service", None)
+        if agent_svc and hasattr(agent_svc, "_llm"):
+            await agent_svc._llm.close()
         await dispose_db()
 
     return app

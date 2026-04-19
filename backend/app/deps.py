@@ -11,10 +11,11 @@ from fastapi import Depends, HTTPException, Request
 
 from app.core.config import settings
 from app.core.security import get_optional_current_user
-from app.services.agent_service import AgentService
+from app.services.agent import AgentService
 from app.services.alarm_service import AlarmService
 from app.services.analysis_service import AnalysisService
 from app.services.sensor_service import SensorService
+from app.repositories.agent_chat_repo import AgentChatRepository
 from app.services.vehicle_service import VehicleService
 
 
@@ -44,8 +45,18 @@ def analysis_service_dep(request: Request) -> AnalysisService:
     )
 
 
-def agent_service_dep() -> AgentService:
-    return AgentService()
+def agent_service_dep(request: Request) -> AgentService:
+    svc = getattr(request.app.state, "agent_service", None)
+    if svc is None:
+        raise HTTPException(status_code=503, detail="Agent 服务未初始化")
+    return svc
+
+
+def agent_chat_repo_dep(request: Request) -> AgentChatRepository:
+    repo = getattr(request.app.state, "agent_chat_repo", None)
+    if repo is None:
+        raise HTTPException(status_code=503, detail="Agent 对话库未初始化")
+    return repo
 
 
 def optional_user_dep(request: Request) -> Optional[str]:

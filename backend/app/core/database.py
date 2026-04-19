@@ -71,6 +71,18 @@ def _migrate_environment_anomalies_schema(sync_conn) -> None:
     )
 
 
+def _migrate_agent_messages_reasoning(sync_conn) -> None:
+    """旧库仅有 content 等列；新版本增加 reasoning（思考过程）。"""
+    insp = inspect(sync_conn)
+    names = insp.get_table_names()
+    if "agent_messages" not in names:
+        return
+    col_names = {c["name"] for c in insp.get_columns("agent_messages")}
+    if "reasoning" in col_names:
+        return
+    sync_conn.execute(text("ALTER TABLE agent_messages ADD COLUMN reasoning TEXT"))
+
+
 class Base(DeclarativeBase):
     """全局 ORM 基类；传感器等表均挂在此 metadata 上。"""
 
@@ -114,6 +126,7 @@ def get_session_factory() -> async_sessionmaker[AsyncSession]:
 
 async def init_db() -> None:
     """创建缺失的 ORM 表。"""
+    from app.models.agent_chat import AgentConversation, AgentMessage  # noqa: F401
     from app.models.environment_anomaly import EnvironmentAnomaly  # noqa: F401
     from app.models.sensor import SensorData  # noqa: F401
 
@@ -121,6 +134,7 @@ async def init_db() -> None:
     async with engine.begin() as conn:
         await conn.run_sync(Base.metadata.create_all)
         await conn.run_sync(_migrate_environment_anomalies_schema)
+        await conn.run_sync(_migrate_agent_messages_reasoning)
 
 
 async def dispose_db() -> None:

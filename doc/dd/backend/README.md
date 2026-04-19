@@ -13,6 +13,6 @@
 | [04-API路由-告警.md](./04-API路由-告警.md) | 告警 REST |
 | [05-API路由-车辆与设备.md](./05-API路由-车辆与设备.md) | 车辆与设备 REST |
 | [06-环境分析模块.md](./06-环境分析模块.md) | AnalysisService、聚合与摘要 API |
-| [07-Agent模块.md](./07-Agent模块.md) | LLM 编排、工具、会话与安全 |
+| [07-Agent模块.md](./07-Agent模块.md) | LLM 编排、工具、会话、RAG、与 PRD 对齐及演进方案 |
 
 **后端需求**见 [`../../prd/backend/`](../../prd/backend/README.md)。**硬件设计**仍以 [`../硬件端设计文档.md`](../硬件端设计文档.md) 为准。
