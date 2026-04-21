@@ -36,7 +36,7 @@
           <div ref="listRef" class="messages">
             <div
               v-for="(m, i) in messages"
-              :key="i"
+              :key="m._uid || `row-${i}`"
               :class="['msg-row', m.role === 'user' ? 'is-user' : 'is-assistant']"
             >
               <template v-if="m.role === 'assistant'">
@@ -44,12 +44,28 @@
                   <el-icon><ChatDotRound /></el-icon>
                 </div>
                 <div class="msg-stack">
-                  <details v-if="m.reasoning" class="think-block" open>
+                  <details v-if="m.reasoning && !m.streaming" class="think-block" open>
                     <summary class="think-head">已深度思考</summary>
                     <div class="think-quote">{{ m.reasoning }}</div>
                   </details>
                   <div :class="['answer-block', { 'is-streaming': m.streaming }]">
-                    <div class="md-body" v-html="renderMd(m.content)" />
+                    <!-- 流式阶段同步渲染 Markdown（与结束后同一套 markdown-it + DOMPurify） -->
+                    <div v-if="m.streaming" class="md-body streaming-stack streaming-md">
+                      <template v-if="m.reasoning">
+                        <div class="stream-phase-row">
+                          <span class="stream-phase-label">思考</span>
+                        </div>
+                        <div class="stream-md stream-md--reason" v-html="renderMd(m.reasoning)" />
+                      </template>
+                      <template v-if="m.content">
+                        <div v-if="m.reasoning" class="stream-phase-row stream-phase-row--gap">
+                          <span class="stream-phase-label">回答</span>
+                        </div>
+                        <div class="stream-md stream-md--answer" v-html="renderMd(m.content)" />
+                      </template>
+                      <span class="stream-caret stream-caret--md" aria-hidden="true">▍</span>
+                    </div>
+                    <div v-else class="md-body" v-html="renderMd(m.content)" />
                   </div>
                 </div>
               </template>
@@ -99,14 +115,19 @@
 </template>
 
 <script setup>
-import { computed, nextTick, onMounted, ref, watch } from "vue";
+import { computed, nextTick, onMounted, ref, triggerRef, watch } from "vue";
 import { ElMessage } from "element-plus";
 import { ChatDotRound, Close, User } from "@element-plus/icons-vue";
 import { agentApi, agentChatStream } from "../api/agent";
+import { agentStreamDbg } from "../utils/agentStreamDebug";
 import { renderMarkdown } from "../utils/markdown";
 
 function renderMd(text) {
-  return renderMarkdown(text || "");
+  try {
+    return renderMarkdown(text == null ? "" : String(text));
+  } catch {
+    return "";
+  }
 }
 
 const STORAGE_KEY = "ai_lang_agent_conversations_v1";
@@ -115,7 +136,14 @@ const DEFAULT_GREETING =
   "你好，我是井场智能助手。你可以问我环境数据、告警记录、异常分析等问题。";
 
 function defaultMessages() {
-  return [{ role: "assistant", content: DEFAULT_GREETING }];
+  return [{ role: "assistant", content: DEFAULT_GREETING, _uid: `m-${makeId()}` }];
+}
+
+function ensureMessageIds(msgs) {
+  if (!Array.isArray(msgs)) return;
+  msgs.forEach((m, i) => {
+    if (m && m._uid == null) m._uid = `m-${i}-${makeId()}`;
+  });
 }
 
 function makeId() {
@@ -156,17 +184,20 @@ const sending = ref(false);
 const listRef = ref(null);
 const clarificationOptions = ref([]);
 
-/** 流式时仅改 messages 内对象字段不会使「只读 c.messages 引用」的 computed 失效，用 epoch 强制刷新列表 */
-const messageStreamEpoch = ref(0);
-
-function bumpMessageStreamView() {
-  messageStreamEpoch.value += 1;
-}
-
 const messages = computed(() => {
-  messageStreamEpoch.value;
   const c = conversations.value.find((x) => x.id === activeId.value);
-  return c ? c.messages : defaultMessages();
+  const list = c ? c.messages : defaultMessages();
+  // 显式读嵌套字段，否则仅 return c.messages 时改 asst.content 不会失效本 computed
+  for (const m of list) {
+    if (m?.role === "assistant") {
+      void m.reasoning;
+      void m.content;
+      void m.streaming;
+    } else {
+      void m.content;
+    }
+  }
+  return list;
 });
 
 const sortedConversations = computed(() =>
@@ -178,12 +209,31 @@ function touchActive() {
   if (c) c.updatedAt = Date.now();
 }
 
+/** 替换数组引用，确保侧栏标题等嵌套字段变更能触发列表重绘 */
+function bumpConversationsRef() {
+  conversations.value = conversations.value.slice();
+}
+
 /** 服务端首轮对答归纳的会话标题（SSE done / chat 响应） */
 function applyConversationTitle(conv, title) {
   if (!conv || !title || typeof title !== "string") return;
   const t = title.trim();
   if (!t) return;
   conv.title = t.length > 28 ? `${t.slice(0, 28)}…` : t;
+  bumpConversationsRef();
+}
+
+/** 服务端未返回标题时，用第一轮用户消息作侧栏名称 */
+function deriveTitleFromFirstUserTurn(conv) {
+  if (!conv?.messages?.length) return;
+  const cur = String(conv.title || "").trim();
+  if (cur && cur !== "新对话") return;
+  const u = conv.messages.find((m) => m.role === "user" && String(m.content || "").trim());
+  if (!u) return;
+  let s = String(u.content).trim().replace(/\s+/g, " ");
+  if (!s) return;
+  conv.title = s.length > 28 ? `${s.slice(0, 28)}…` : s;
+  bumpConversationsRef();
 }
 
 function scrollMessagesToEnd(smooth) {
@@ -236,9 +286,10 @@ function initConversations() {
       if (cc.localOnly === undefined) {
         cc.localOnly = String(cc.id).startsWith("local-");
       }
+      ensureMessageIds(cc.messages);
     });
     activeId.value = saved.activeId;
-    if (!conversations.value.some((x) => x.id === activeId.value)) {
+    if (!conversations.value.some((x) => x.id === activeId.value) && conversations.value.length) {
       activeId.value = conversations.value[0].id;
     }
     if (saved.chatMode === "rag" || saved.chatMode === "general") {
@@ -309,7 +360,7 @@ async function deleteConversation(id) {
   const idx = conversations.value.findIndex((x) => x.id === id);
   if (idx < 0) return;
   conversations.value.splice(idx, 1);
-  if (activeId.value === id) {
+  if (activeId.value === id && conversations.value.length) {
     activeId.value = conversations.value[0].id;
   }
   clarificationOptions.value = [];
@@ -333,10 +384,11 @@ async function loadMessagesForConversation(c) {
   if (!c?.backendSessionId) return;
   try {
     const data = await agentApi.getSession(c.backendSessionId);
-    c.messages = (data.messages || []).map((m) => ({
+    c.messages = (data.messages || []).map((m, idx) => ({
       role: m.role,
       content: m.content || "",
       reasoning: m.reasoning || "",
+      _uid: `m-${idx}-${makeId()}`,
     }));
     if (data.mode === "rag" || data.mode === "general") {
       chatMode.value = data.mode;
@@ -363,8 +415,10 @@ async function initFromServer() {
       localOnly: false,
       messages: [],
     }));
-    activeId.value = conversations.value[0].id;
-    await loadMessagesForConversation(conversations.value[0]);
+    if (conversations.value.length) {
+      activeId.value = conversations.value[0].id;
+      await loadMessagesForConversation(conversations.value[0]);
+    }
   } catch {
     initConversations();
   }
@@ -388,7 +442,7 @@ async function send() {
   const c = conversations.value.find((x) => x.id === activeId.value);
   if (!c) return;
 
-  c.messages = [...c.messages, { role: "user", content: text }];
+  c.messages = [...c.messages, { role: "user", content: text, _uid: `m-${makeId()}` }];
   input.value = "";
   sending.value = true;
   clarificationOptions.value = [];
@@ -398,6 +452,7 @@ async function send() {
     content: "",
     reasoning: "",
     streaming: true,
+    _uid: `m-${makeId()}`,
   };
   c.messages = [...c.messages, asst];
 
@@ -434,15 +489,23 @@ async function send() {
             label: o.label,
             value: o.value,
           }));
-          bumpMessageStreamView();
+          deriveTitleFromFirstUserTurn(c);
           touchActive();
           persistState(conversations.value, activeId.value, chatMode.value);
           return;
         }
         if (ev.type === "delta") {
-          if (ev.reasoning) asst.reasoning += ev.reasoning;
-          if (ev.content) asst.content += ev.content;
-          bumpMessageStreamView();
+          const dr = ev.reasoning;
+          const dc = ev.content;
+          if (dr != null && dr !== "") asst.reasoning = (asst.reasoning || "") + String(dr);
+          if (dc != null && dc !== "") asst.content = (asst.content || "") + String(dc);
+          agentStreamDbg("vue-delta", {
+            dR: String(dr ?? "").length,
+            dC: String(dc ?? "").length,
+            totalR: (asst.reasoning || "").length,
+            totalC: (asst.content || "").length,
+          });
+          triggerRef(conversations);
           scrollToBottomThrottled();
           return;
         }
@@ -453,8 +516,9 @@ async function send() {
           if (ev.content != null && ev.content !== "") asst.content = ev.content;
           if (ev.conversation_title != null && String(ev.conversation_title).trim() !== "") {
             applyConversationTitle(c, ev.conversation_title);
+          } else {
+            deriveTitleFromFirstUserTurn(c);
           }
-          bumpMessageStreamView();
           touchActive();
           persistState(conversations.value, activeId.value, chatMode.value);
         }
@@ -472,6 +536,8 @@ async function send() {
       asst.streaming = false;
       if (res.conversation_title != null && String(res.conversation_title).trim() !== "") {
         applyConversationTitle(c, res.conversation_title);
+      } else {
+        deriveTitleFromFirstUserTurn(c);
       }
       if (res.clarification?.options?.length) {
         clarificationOptions.value = res.clarification.options;
@@ -708,13 +774,49 @@ onMounted(async () => {
   padding: 4px 0 8px;
   color: #303133;
 }
-.answer-block.is-streaming .md-body::after {
-  content: "▍";
-  animation: blink 1s step-end infinite;
+.streaming-stack {
+  font-size: 14px;
+  line-height: 1.65;
+  word-break: break-word;
+}
+.streaming-md .stream-phase-row {
+  margin-bottom: 4px;
+}
+.streaming-md .stream-phase-row--gap {
+  margin-top: 10px;
+}
+.stream-md--reason :deep(p:last-child),
+.stream-md--answer :deep(p:last-child) {
+  margin-bottom: 0;
+}
+.stream-md--reason :deep(p) {
+  color: #606266;
+}
+.stream-md--reason :deep(code) {
+  color: #606266;
+}
+.stream-phase-label {
+  display: inline;
+  margin-right: 6px;
+  font-size: 12px;
+  font-weight: 600;
+  color: #909399;
+  user-select: none;
+}
+.stream-caret {
+  display: inline;
+  margin-left: 1px;
   color: #409eff;
   font-weight: 300;
+  vertical-align: baseline;
+  animation: streamCaretBlink 1s step-end infinite;
 }
-@keyframes blink {
+.stream-caret--md {
+  display: inline-block;
+  margin-top: 2px;
+  vertical-align: text-bottom;
+}
+@keyframes streamCaretBlink {
   50% {
     opacity: 0;
   }
@@ -722,6 +824,10 @@ onMounted(async () => {
 .md-body {
   font-size: 14px;
   line-height: 1.65;
+  word-break: break-word;
+}
+.streaming-plain {
+  white-space: pre-wrap;
   word-break: break-word;
 }
 .md-body :deep(p) {

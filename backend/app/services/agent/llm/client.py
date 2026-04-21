@@ -179,9 +179,9 @@ class LLMClient:
         async with client.stream("POST", "chat/completions", json=body) as resp:
             resp.raise_for_status()
             async for line in resp.aiter_lines():
-                if not line.startswith("data: "):
+                if not line.startswith("data:"):
                     continue
-                payload = line[6:]
+                payload = line[5:].lstrip()
                 if payload.strip() == "[DONE]":
                     break
                 try:
@@ -199,11 +199,34 @@ class LLMClient:
                 if fr:
                     last_finish = fr
 
-                reasoning = delta.get("reasoning_content") or delta.get("reasoning")
+                # 部分兼容层把片段放在 delta.message 里，或单独用 text 字段
+                msg_d = delta.get("message")
+                if not isinstance(msg_d, dict):
+                    msg_d = {}
+
+                reasoning = (
+                    delta.get("reasoning_content")
+                    or delta.get("reasoning")
+                    or msg_d.get("reasoning_content")
+                    or msg_d.get("reasoning")
+                )
                 if reasoning:
                     full_reasoning += reasoning
                     yield {"kind": "delta", "reasoning": reasoning}
+
                 text = delta.get("content")
+                if text is None:
+                    text = msg_d.get("content")
+                if text is None:
+                    text = delta.get("text") or msg_d.get("text")
+                if isinstance(text, list):
+                    pieces: List[str] = []
+                    for p in text:
+                        if isinstance(p, dict):
+                            pieces.append(str(p.get("text") or p.get("content") or ""))
+                        elif isinstance(p, str):
+                            pieces.append(p)
+                    text = "".join(pieces) or None
                 if text:
                     full_content += text
                     yield {"kind": "delta", "content": text}

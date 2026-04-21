@@ -75,6 +75,17 @@ class AgentService:
         self._max_tool_rounds = max_tool_rounds
         self._chat_repo = chat_repo
 
+    @staticmethod
+    def _sync_conversation_title_done_flag(session: Session, transcript: List[ChatMessage]) -> None:
+        """
+        客户端每次用完整 transcript 覆盖内存会话后调用。
+        若请求里仍只有一条 user（整会话的第一轮提问），重置标题标记，以便本轮结束后生成侧栏标题。
+        多轮后 transcript 含多条 user 时保持原标记，避免每轮重复调用标题模型。
+        """
+        n_user = sum(1 for m in transcript if m.role == "user")
+        if n_user == 1:
+            session.conversation_title_done = False
+
     async def _persist(
         self,
         session: Session,
@@ -106,8 +117,11 @@ class AgentService:
             if m.role == "assistant":
                 c0 = (m.content or "").strip()
                 r0 = (m.reasoning or "").strip()
-                # 推理模型常见：正文在流里尚未合并时 content 为空，仅有 reasoning
-                merged = c0 or r0
+                # 起标题时须让模型看到思考+正文；仅有其一则单用
+                if r0 and c0:
+                    merged = f"{r0}\n\n{c0}"
+                else:
+                    merged = c0 or r0
                 return u_text, merged
         return u_text, ""
 
@@ -128,11 +142,20 @@ class AgentService:
             return s
 
         def _fallback_round_title() -> str:
-            line = a_text.replace("\n", " ").strip() or u_text.replace("\n", " ").strip()
-            if len(line) > 22:
-                line = line[:22] + "…"
-            out = _clean(line)
-            return out or "会话"
+            """首轮命名：优先助手首答（含思考与正文合并后的摘要），其次用户首问。"""
+            a_line = a_text.replace("\n", " ").strip()
+            if len(a_line) > 22:
+                a_line = a_line[:22] + "…"
+            a_short = _clean(a_line)
+            if a_short and len(a_short.replace("…", "")) >= 2:
+                return a_short
+            u_one = u_text.replace("\n", " ").strip()
+            if len(u_one) > 22:
+                u_one = u_one[:22] + "…"
+            u_short = _clean(u_one)
+            if u_short and len(u_short.replace("…", "")) >= 2:
+                return u_short
+            return "会话"
 
         try:
             if not self._llm.is_configured:
@@ -147,12 +170,20 @@ class AgentService:
                 {
                     "role": "system",
                     "content": (
-                        "你是会话标题生成器。根据【用户】首问与【助手】首轮回复，概括主题，"
-                        "输出一条中文标题：10～22 个字；勿照抄用户原句；勿含「用户」「助手」等标签；"
-                        "不要引号；只输出一行标题，不要解释。"
+                        "你是会话标题生成器。请仅根据「第一轮对话」：用户首条提问 + 助手首条回复（其中助手块可能同时包含"
+                        "「思考/推理过程」与「正式回答」，请综合二者提炼主题，不要只看正文而忽略思考里的关键意图）。"
+                        "请先在心里完成简要归纳（不要写出该归纳过程），然后只输出侧栏用的一条中文标题。"
+                        "要求：10～22 个字；紧扣用户首问；勿照抄原句；勿含「用户」「助手」等标签；不要引号；"
+                        "除这一行标题外不要输出任何其他文字。"
                     ),
                 },
-                {"role": "user", "content": f"【用户】\n{u_text[:600]}\n\n【助手】\n{a_text[:1200]}"},
+                {
+                    "role": "user",
+                    "content": (
+                        f"【用户】\n{u_text[:600]}\n\n"
+                        f"【助手】（以下为第一轮助手输出全文，含思考与正文时请一并参考）\n{a_text[:4000]}"
+                    ),
+                },
             ]
             try:
                 resp = await asyncio.wait_for(
@@ -173,18 +204,26 @@ class AgentService:
             return _fallback_round_title()
 
     async def _finalize_title_and_persist(self, session: Session) -> Optional[str]:
-        """写入 assistant 后：首轮对答归纳标题并落库；返回实际写入 DB 的标题（供前端同步侧栏）。"""
+        """写入 assistant 后：首轮对答归纳标题并落库；返回实际标题字符串（供 SSE/JSON 同步侧栏，无库时仍返回内存标题）。"""
         prev_done = session.conversation_title_done
         suggested = await self._suggest_conversation_title(session)
         attempted = session.conversation_title_done and (not prev_done)
         infer = not attempted
         if suggested:
+            if self._chat_repo is None:
+                return suggested
             written = await self._persist(
                 session,
                 title=suggested,
-                infer_title_from_messages=True,
+                infer_title_from_messages=False,
             )
-            return written
+            return written if written else suggested
+        if self._chat_repo is None:
+            u, _a = self._first_round_user_assistant(session)
+            if u:
+                one = u.replace("\n", " ").strip()
+                return (one[:28] + "…") if len(one) > 28 else one
+            return None
         written = await self._persist(session, title=None, infer_title_from_messages=infer)
         return written
 
@@ -275,6 +314,7 @@ class AgentService:
                     reasoning=msg.reasoning if msg.role == "assistant" else None,
                 )
             )
+        self._sync_conversation_title_done_flag(session, messages)
 
         # 仅对「本轮最后一条 user」做澄清（不额外调用大模型）
         last_user = ""
@@ -407,6 +447,7 @@ class AgentService:
                     reasoning=msg.reasoning if msg.role == "assistant" else None,
                 )
             )
+        self._sync_conversation_title_done_flag(session, messages)
 
         last_user = ""
         for msg in reversed(messages):

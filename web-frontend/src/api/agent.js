@@ -1,32 +1,16 @@
 import request from "@/utils/request";
 import { nextTick } from "vue";
+import { agentStreamDbg } from "@/utils/agentStreamDebug";
+
+/**
+ * 同一 TCP 块里可能含大量 SSE 行；若同步连续 onEvent，Vue 会合并成一次渲染。
+ * 每个事件后 await nextTick()，让界面按事件粒度刷新（流式可见）。
+ */
 
 const jsonHeaders = {
   "Content-Type": "application/json",
-  Accept: "application/json",
+  Accept: "text/event-stream",
 };
-
-/**
- * 将 delta 按字（Unicode 码点）拆开，每步 onEvent + nextTick，配合页面侧 bump 触发列表重渲染。
- */
-async function emitDeltaInChunks(onEvent, ev) {
-  const reasoning = ev.reasoning || "";
-  const content = ev.content || "";
-  if (!reasoning && !content) {
-    onEvent(ev);
-    await nextTick();
-    return;
-  }
-  const pushByChar = async (field, text) => {
-    if (!text) return;
-    for (const ch of text) {
-      onEvent(field === "reasoning" ? { type: "delta", reasoning: ch } : { type: "delta", content: ch });
-      await nextTick();
-    }
-  };
-  await pushByChar("reasoning", reasoning);
-  await pushByChar("content", content);
-}
 
 /**
  * SSE：`data:` 每行为 JSON，见后端 `/api/agent/chat/stream`
@@ -57,34 +41,52 @@ export async function agentChatStream(body, onEvent, signal) {
   }
   const reader = res.body?.getReader();
   if (!reader) throw new Error("无响应流");
+  agentStreamDbg("fetch-open", { url, ok: res.ok, ct: res.headers.get("content-type") });
   const dec = new TextDecoder();
   let buffer = "";
+
+  async function dispatchSseBlock(block) {
+    const norm = block.replace(/\r\n/g, "\n").replace(/\r/g, "\n");
+    for (const line of norm.split("\n")) {
+      if (!line.startsWith("data:")) continue;
+      const raw = line.slice(5).trimStart();
+      if (!raw || raw === "[DONE]") continue;
+      try {
+        const ev = JSON.parse(raw);
+        onEvent(ev);
+        if (ev.type !== "delta") {
+          agentStreamDbg("event", { type: ev.type, session_id: ev.session_id });
+        }
+        await nextTick();
+      } catch (e) {
+        agentStreamDbg("json-skip", { rawLen: raw.length, err: String(e) });
+      }
+    }
+  }
+
+  let readCount = 0;
   while (true) {
     const { done, value } = await reader.read();
-    if (done) break;
+    if (done) {
+      agentStreamDbg("read-done", { readCount, bufferTailLen: buffer.length });
+      break;
+    }
+    readCount += 1;
+    const bytes = value?.byteLength ?? 0;
     buffer += dec.decode(value, { stream: true });
     let idx;
     while ((idx = buffer.indexOf("\n\n")) >= 0) {
       const block = buffer.slice(0, idx);
       buffer = buffer.slice(idx + 2);
-      const norm = block.replace(/\r\n/g, "\n").replace(/\r/g, "\n");
-      for (const line of norm.split("\n")) {
-        if (!line.startsWith("data:")) continue;
-        const raw = line.slice(5).trimStart();
-        if (!raw) continue;
-        try {
-          const ev = JSON.parse(raw);
-          if (ev.type === "delta") {
-            await emitDeltaInChunks(onEvent, ev);
-          } else {
-            onEvent(ev);
-            await nextTick();
-          }
-        } catch {
-          /* skip malformed */
-        }
-      }
+      await dispatchSseBlock(block);
     }
+    agentStreamDbg("read-chunk", { readCount, bytes, bufferLen: buffer.length });
+  }
+  buffer += dec.decode();
+  const tail = buffer.trim();
+  if (tail) {
+    agentStreamDbg("buffer-flush-tail", { preview: tail.slice(0, 200) });
+    await dispatchSseBlock(buffer);
   }
 }
 

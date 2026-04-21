@@ -67,10 +67,11 @@ class AgentChatRepository:
         now = datetime.utcnow()
         async with self._session_factory() as sess:
             conv = await sess.get(AgentConversation, session.id)
-            t = title
+            t = (title or "").strip() or None
             can_infer_user = conv is None or not (
                 conv.title and conv.title.strip() and conv.title != "新对话"
             )
+            # 显式传入标题时仅用该标题，勿再用首条用户消息覆盖（首轮归纳标题）
             if not t and infer_title_from_messages and can_infer_user:
                 for m in session.messages:
                     if m.role == "user" and m.content.strip():
