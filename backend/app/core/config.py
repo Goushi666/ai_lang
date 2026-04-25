@@ -98,6 +98,16 @@ class Settings(BaseSettings):
     AGENT_RAG_ENABLED: bool = True
     AGENT_RAG_TOP_K: int = 5
     AGENT_CLARIFICATION_ENABLED: bool = True
+    # 澄清器：LLM 给出 clarity_score∈[0,1]，低于此值视为不够清晰并触发第二轮 LLM 生成追问+选项
+    AGENT_CLARIFICATION_MIN_CLARITY: float = Field(
+        default=0.55,
+        ge=0.0,
+        le=1.0,
+        description="清晰度下限；模型评分低于该值则追问（0=极模糊，1=极清晰）",
+    )
+    AGENT_CLARIFICATION_JUDGE_TIMEOUT_SEC: float = Field(default=6.0, ge=1.0, le=60.0)
+    AGENT_CLARIFICATION_CLARIFY_TIMEOUT_SEC: float = Field(default=12.0, ge=1.0, le=120.0)
+    AGENT_CLARIFICATION_MAX_OPTIONS: int = Field(default=5, ge=2, le=8)
     # True：SSE 使用单次流式 chat/completions，token 随上游到达；False：整段生成后再一次性返回（无 delta）
     AGENT_STREAM_ENABLED: bool = True
     # 已废弃：保留以兼容旧 .env，不再读取
@@ -107,6 +117,11 @@ class Settings(BaseSettings):
     AGENT_STREAM_UI_CHUNK_SIZE: int = 1
     # 每拆一段后 await asyncio.sleep(0)，让出事件循环便于把数据刷到客户端（关闭则仍可能整批缓冲）
     AGENT_STREAM_YIELD_TO_LOOP: bool = True
+    # Agent 工具 export_csv_file：导出目录（相对 backend 根）与最大行数
+    AGENT_CSV_EXPORT_DIR: str = "data/agent_exports"
+    AGENT_CSV_EXPORT_MAX_ROWS: int = Field(default=50_000, ge=1, le=500_000)
+    # get_current_time 工具展示的本地时区（IANA），如 Asia/Shanghai
+    AGENT_TIME_DISPLAY_TZ: str = "Asia/Shanghai"
     VECTOR_DB_PATH: str = "./data/vector_db"
     # 知识库（SQLite FTS5）文件路径；与旧 Chroma 目录 VECTOR_DB_PATH 无关
     KNOWLEDGE_SQLITE_PATH: str = "./data/knowledge_fts.db"

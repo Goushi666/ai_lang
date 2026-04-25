@@ -32,7 +32,7 @@ class GetAlarmsHistory(BaseTool):
             },
             "limit": {
                 "type": "integer",
-                "description": "最大返回条数（默认 20）",
+                "description": "最大返回条数（默认 200，上限 500）；结果含 total 为命中总数，records 为本页。",
             },
         },
         "required": [],
@@ -46,7 +46,12 @@ class GetAlarmsHistory(BaseTool):
         start_str = kwargs.get("start_time")
         end_str = kwargs.get("end_time")
         level = kwargs.get("level")
-        limit = kwargs.get("limit", 20)
+        raw_limit = kwargs.get("limit", 200)
+        try:
+            limit = int(raw_limit)
+        except (TypeError, ValueError):
+            limit = 200
+        limit = max(1, min(limit, 500))
 
         try:
             start = (

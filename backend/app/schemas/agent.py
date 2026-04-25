@@ -33,8 +33,18 @@ class ClarificationPayload(BaseModel):
 class ChatRequest(BaseModel):
     session_id: Optional[str] = None
     messages: List[ChatMessage] = Field(default_factory=list)
-    mode: str = Field("general", description="对话模式：general | rag")
+    mode: str = Field("general", description="对话模式：general | rag | vehicle")
     stream: bool = Field(False, description="是否启用 SSE 流式输出")
+
+
+class ExportDownloadItem(BaseModel):
+    """Agent CSV 导出完成后供浏览器下载的链接（用户在系统对话框中选保存位置）。"""
+
+    filename: str
+    download_path: str = Field(
+        ...,
+        description="相对站点根的 URL，如 /api/agent/export-download?filename=...",
+    )
 
 
 class ChatResponse(BaseModel):
@@ -51,6 +61,10 @@ class ChatResponse(BaseModel):
     conversation_title: Optional[str] = Field(
         None,
         description="服务端根据首轮用户+助手对答归纳的会话标题（若有）",
+    )
+    exports: List[ExportDownloadItem] = Field(
+        default_factory=list,
+        description="本轮非流式对话中 CSV 导出成功后的下载项",
     )
 
 

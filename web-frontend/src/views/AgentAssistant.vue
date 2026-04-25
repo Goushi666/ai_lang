@@ -67,6 +67,18 @@
                     </div>
                     <div v-else class="md-body" v-html="renderMd(m.content)" />
                   </div>
+                  <div v-if="m.exports?.length" class="export-bar">
+                    <span class="export-bar-label">导出文件</span>
+                    <a
+                      v-for="(exp, ei) in m.exports"
+                      :key="`${exp.filename}-${ei}`"
+                      class="export-link"
+                      :href="exportFullHref(exp)"
+                      :download="exp.filename"
+                    >
+                      保存到电脑（{{ exp.filename }}）
+                    </a>
+                  </div>
                 </div>
               </template>
               <template v-else>
@@ -128,6 +140,23 @@ function renderMd(text) {
   } catch {
     return "";
   }
+}
+
+/** Agent CSV：拼接 API 根路径，供 `<a download>` 触发系统「另存为」 */
+function exportFullHref(exp) {
+  const base = import.meta.env.VITE_API_BASE_URL || "";
+  const p = exp?.download_path || "";
+  if (!p) return "#";
+  return `${base}${p}`;
+}
+
+/** 流式已累加的内容与 done 终值合并：部分接口终态 reasoning/content 比 delta 链更短，避免覆盖变短 */
+function mergeStreamedField(accumulated, doneVal) {
+  const a = accumulated == null ? "" : String(accumulated);
+  const d = doneVal == null || doneVal === "" ? "" : String(doneVal);
+  if (!d) return a;
+  if (!a) return d;
+  return d.length >= a.length ? d : a;
 }
 
 const STORAGE_KEY = "ai_lang_agent_conversations_v1";
@@ -193,6 +222,7 @@ const messages = computed(() => {
       void m.reasoning;
       void m.content;
       void m.streaming;
+      void m.exports;
     } else {
       void m.content;
     }
@@ -452,6 +482,7 @@ async function send() {
     content: "",
     reasoning: "",
     streaming: true,
+    exports: [],
     _uid: `m-${makeId()}`,
   };
   c.messages = [...c.messages, asst];
@@ -480,6 +511,16 @@ async function send() {
           session_id: c.backendSessionId || undefined,
         },
         (ev) => {
+        if (ev.type === "export_ready") {
+          if (!Array.isArray(asst.exports)) asst.exports = [];
+          asst.exports.push({
+            filename: ev.filename || "export.csv",
+            download_path: ev.download_path || "",
+          });
+          triggerRef(conversations);
+          scrollToBottomThrottled();
+          return;
+        }
         if (ev.type === "clarification") {
           asst.content = ev.question || "";
           asst.reasoning = "";
@@ -512,8 +553,8 @@ async function send() {
         if (ev.type === "done") {
           asst.streaming = false;
           if (ev.session_id) applyServerSessionId(c, ev.session_id);
-          if (ev.reasoning != null && ev.reasoning !== "") asst.reasoning = ev.reasoning;
-          if (ev.content != null && ev.content !== "") asst.content = ev.content;
+          asst.reasoning = mergeStreamedField(asst.reasoning, ev.reasoning);
+          asst.content = mergeStreamedField(asst.content, ev.content);
           if (ev.conversation_title != null && String(ev.conversation_title).trim() !== "") {
             applyConversationTitle(c, ev.conversation_title);
           } else {
@@ -534,6 +575,12 @@ async function send() {
       asst.content = res.content || "";
       asst.reasoning = res.reasoning || "";
       asst.streaming = false;
+      if (Array.isArray(res.exports) && res.exports.length) {
+        asst.exports = res.exports.map((e) => ({
+          filename: e.filename || "export.csv",
+          download_path: e.download_path || "",
+        }));
+      }
       if (res.conversation_title != null && String(res.conversation_title).trim() !== "") {
         applyConversationTitle(c, res.conversation_title);
       } else {
@@ -773,6 +820,30 @@ onMounted(async () => {
 .answer-block {
   padding: 4px 0 8px;
   color: #303133;
+}
+.export-bar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px 12px;
+  margin-top: 10px;
+  padding: 10px 12px;
+  background: #f5f9ff;
+  border: 1px solid #d9ecff;
+  border-radius: 8px;
+  font-size: 13px;
+}
+.export-bar-label {
+  color: #606266;
+  flex-shrink: 0;
+}
+.export-link {
+  color: #409eff;
+  text-decoration: none;
+  font-weight: 500;
+}
+.export-link:hover {
+  text-decoration: underline;
 }
 .streaming-stack {
   font-size: 14px;

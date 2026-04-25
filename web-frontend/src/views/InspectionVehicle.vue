@@ -129,9 +129,21 @@
               <template #header>
                 <div class="card-head-stack">
                   <span class="card-head">云台</span>
-                  
                 </div>
               </template>
+              <div class="param-row gimbal-preset-row">
+                <span class="param-row-label">目标档位</span>
+                <el-radio-group
+                  v-model="gimbalTargetPreset"
+                  size="small"
+                  class="gimbal-preset-rg"
+                  :disabled="trackModeLocked"
+                  @change="(v) => onGimbalPresetChange(v)"
+                >
+                  <el-radio-button label="control">控制 110/95</el-radio-button>
+                  <el-radio-button label="track">循迹 110/145</el-radio-button>
+                </el-radio-group>
+              </div>
               <div class="param-row">
                 <span class="param-row-label">关节 6</span>
                 <div class="param-row-slider">
@@ -153,7 +165,7 @@
                   <el-slider
                     v-model="gimbalJ7"
                     :min="0"
-                    :max="90"
+                    :max="145"
                     :step="1"
                     size="small"
                     :disabled="trackModeLocked"
@@ -181,22 +193,16 @@
 
             <el-card shadow="never" class="control-card compact-panel">
               <template #header>
-                <div class="control-card-head">
-                  <div class="control-card-head-titles">
-                    <span class="card-head">遥控面板</span>
-                    <el-text type="info" size="small">
-                      {{
-                        controlPanelMode === "vehicle"
-                          ? trackModeLocked
-                            ? "循迹中：方向键与本面板已锁定，请先切回「普通模式」。"
-                            : "方向：W/A/S/D、空格停"
-                          : "机械臂：松手后下发"
-                      }}
-                    </el-text>
-                  </div>
-                  <el-radio-group v-model="controlPanelMode" size="small" class="control-mode-toggle">
+                <div class="control-card-head control-card-head--inline">
+                  <span class="card-head control-card-head-title">遥控面板</span>
+                  <el-radio-group
+                    v-model="controlPanelMode"
+                    size="small"
+                    class="control-mode-toggle control-mode-toggle--triple"
+                  >
                     <el-radio-button label="vehicle">方向</el-radio-button>
                     <el-radio-button label="arm">机械臂</el-radio-button>
+                    <el-radio-button label="presets">程序动作</el-radio-button>
                   </el-radio-group>
                 </div>
               </template>
@@ -215,7 +221,7 @@
                       <div class="dpad-cell"></div>
                       <div class="dpad-cell">
                         <el-button type="primary" class="dpad-btn" :disabled="trackModeLocked" @click="send('forward')">
-                          <el-icon :size="20"><Top /></el-icon>
+                          <el-icon :size="16"><Top /></el-icon>
                           <div class="dpad-label">前进</div>
                         </el-button>
                       </div>
@@ -224,19 +230,19 @@
                     <div class="dpad-row">
                       <div class="dpad-cell">
                         <el-button type="primary" class="dpad-btn" :disabled="trackModeLocked" @click="send('left')">
-                          <el-icon :size="20"><Back /></el-icon>
+                          <el-icon :size="16"><Back /></el-icon>
                           <div class="dpad-label">左转</div>
                         </el-button>
                       </div>
                       <div class="dpad-cell">
                         <el-button type="warning" class="dpad-btn stop-btn" :disabled="trackModeLocked" @click="send('stop')">
-                          <el-icon :size="20"><VideoPause /></el-icon>
+                          <el-icon :size="16"><VideoPause /></el-icon>
                           <div class="dpad-label">停止</div>
                         </el-button>
                       </div>
                       <div class="dpad-cell">
                         <el-button type="primary" class="dpad-btn" :disabled="trackModeLocked" @click="send('right')">
-                          <el-icon :size="20"><Right /></el-icon>
+                          <el-icon :size="16"><Right /></el-icon>
                           <div class="dpad-label">右转</div>
                         </el-button>
                       </div>
@@ -245,7 +251,7 @@
                       <div class="dpad-cell"></div>
                       <div class="dpad-cell">
                         <el-button type="primary" class="dpad-btn" :disabled="trackModeLocked" @click="send('backward')">
-                          <el-icon :size="20"><Bottom /></el-icon>
+                          <el-icon :size="16"><Bottom /></el-icon>
                           <div class="dpad-label">后退</div>
                         </el-button>
                       </div>
@@ -270,6 +276,7 @@
                         :max="180"
                         :step="1"
                         size="small"
+                        :disabled="armSequenceRunning"
                         @update:model-value="(v) => setArmAngle(i - 1, v)"
                         @change="() => onArmJointChange(i - 1)"
                       />
@@ -279,9 +286,79 @@
                   <div class="param-row arm-param-row">
                     <span class="param-row-label arm-label">机械臂转速</span>
                     <div class="param-row-slider arm-slider-wrap">
-                      <el-slider v-model="armSpeed" :min="0" :max="100" :step="5" size="small" @change="onArmSpeedChange" />
+                      <el-slider
+                        v-model="armSpeed"
+                        :min="0"
+                        :max="100"
+                        :step="5"
+                        size="small"
+                        :disabled="armSequenceRunning"
+                        @change="onArmSpeedChange"
+                      />
                     </div>
                     <span class="param-row-val arm-val">{{ armSpeed }}</span>
+                  </div>
+                </div>
+              </div>
+
+              <div v-show="controlPanelMode === 'presets'" class="control-body arm-actions-panel">
+                <div class="arm-actions-toolbar">
+                  <el-button
+                    type="primary"
+                    class="arm-toolbar-reset"
+                    :loading="armSequenceRunning"
+                    title="Shift+点击 可编辑复位角度"
+                    @click="onResetButtonClick"
+                  >
+                    <el-icon style="margin-right: 4px"><RefreshRight /></el-icon>
+                    复位
+                  </el-button>
+                  <el-button
+                    class="arm-toolbar-plus"
+                    :disabled="armSequenceRunning"
+                    title="新建动作"
+                    @click="openAddActionDialog"
+                  >
+                    <el-icon :size="15"><Plus /></el-icon>
+                    <span>添加</span>
+                  </el-button>
+                </div>
+                <div class="arm-actions-scroll">
+                  <div v-if="armPresets.length" class="arm-actions-saved">
+                    <div v-for="p in armPresets" :key="p.id" class="arm-saved-card">
+                      <div class="arm-saved-info">
+                        <span class="arm-saved-icon">▶</span>
+                        <span class="arm-saved-name">{{ p.name }}</span>
+                      </div>
+                      <div class="arm-saved-actions">
+                        <el-button
+                          type="primary"
+                          size="small"
+                          class="arm-saved-run"
+                          :loading="armSequenceRunning"
+                          @click="runPresetSequence(p)"
+                        >
+                          执行
+                        </el-button>
+                        <el-button
+                          text
+                          type="danger"
+                          size="small"
+                          class="arm-saved-del"
+                          :disabled="armSequenceRunning"
+                          @click.stop="removePreset(p.id)"
+                        >
+                          删除
+                        </el-button>
+                      </div>
+                    </div>
+                  </div>
+                  <div v-else class="arm-actions-empty">
+                    <div class="arm-actions-empty-icon">
+                      <el-icon :size="28" color="rgba(114,46,209,0.25)"><Plus /></el-icon>
+                    </div>
+                    <span class="arm-actions-empty-text">暂无预设动作</span>
+                    <span class="arm-actions-empty-hint">点击上方「添加」创建</span>
                   </div>
                 </div>
               </div>
@@ -290,15 +367,98 @@
         </div>
       </div>
     </div>
+
+    <el-dialog v-model="resetAnglesDialogVisible" title="编辑复位角度" width="420px" destroy-on-close>
+      <div class="reset-angles-grid">
+        <div v-for="idx in 6" :key="'ra-' + (idx - 1)" class="reset-angle-item">
+          <span class="reset-angle-label">关节 {{ idx - 1 }}</span>
+          <el-input-number v-model="resetAnglesDraft[idx - 1]" :min="0" :max="180" :step="1" size="small" controls-position="right" />
+        </div>
+      </div>
+      <template #footer>
+        <el-button @click="resetAnglesDialogVisible = false">取消</el-button>
+        <el-button type="primary" @click="saveResetAnglesFromDialog">保存</el-button>
+      </template>
+    </el-dialog>
+
+    <el-dialog
+      v-model="addActionDialogVisible"
+      title="新建动作"
+      width="480px"
+      class="add-action-dialog"
+      align-center
+      destroy-on-close
+    >
+      <el-form label-position="top" size="default" class="add-action-form">
+        <el-form-item label="名称" class="add-action-name-item">
+          <el-input v-model="addActionForm.name" maxlength="32" show-word-limit placeholder="如：采样位" />
+        </el-form-item>
+
+        <div class="add-action-section add-action-section--boxed">
+          <div class="add-action-section-head">
+            <span class="add-action-section-title">关节顺序</span>
+            <el-button type="primary" link size="small" @click="resetAddActionJointOrder">恢复 0→5</el-button>
+          </div>
+          <div class="joint-order-grid">
+            <div v-for="step in 6" :key="'ord-' + step" class="joint-order-cell">
+              <span class="joint-order-badge">{{ step }}</span>
+              <el-select
+                v-model="addActionForm.jointOrder[step - 1]"
+                placeholder="轴"
+                size="small"
+                class="joint-order-select"
+              >
+                <el-option v-for="j in jointIndexOptions" :key="'jo-' + step + '-' + j" :label="'J' + j" :value="j" />
+              </el-select>
+            </div>
+          </div>
+        </div>
+
+        <div class="add-action-section add-action-section--boxed">
+          <span class="add-action-section-title">旋转速度</span>
+          <div class="add-action-speed-wrap">
+            <el-slider v-model="addActionForm.speed" :min="0" :max="100" :step="5" />
+            <span class="add-action-speed-val">{{ addActionForm.speed }}</span>
+          </div>
+        </div>
+
+        <div class="add-action-section add-action-section--boxed">
+          <span class="add-action-section-title">目标角度 °</span>
+          <div class="add-action-angles-grid">
+            <div v-for="idx in 6" :key="'aa-' + (idx - 1)" class="add-action-angle-cell">
+              <span class="add-action-angle-label">J{{ idx - 1 }}</span>
+              <el-input-number
+                v-model="addActionForm.angles[idx - 1]"
+                :min="0"
+                :max="180"
+                :step="1"
+                size="small"
+                controls-position="right"
+                class="add-action-angle-input"
+              />
+            </div>
+          </div>
+        </div>
+      </el-form>
+      <template #footer>
+        <div class="add-action-dialog-footer">
+          <el-button @click="addActionDialogVisible = false">取消</el-button>
+          <el-button type="primary" @click="saveAddActionDialog">保存</el-button>
+        </div>
+      </template>
+    </el-dialog>
+
+    <EmbodiedChat />
   </div>
 </template>
 
 <script setup>
-import { computed, inject, nextTick, onMounted, onUnmounted, ref } from "vue";
+import { computed, inject, nextTick, onMounted, onUnmounted, reactive, ref } from "vue";
 import { ElMessage } from "element-plus";
-import { VideoCamera, Top, Bottom, Back, Right, VideoPause } from "@element-plus/icons-vue";
+import { Plus, VideoCamera, Top, Bottom, Back, Right, VideoPause, RefreshRight } from "@element-plus/icons-vue";
 import Hls from "hls.js";
 import { vehicleApi } from "../api/vehicle";
+import EmbodiedChat from "./EmbodiedChat.vue";
 import { getVideoStreamConfig } from "../api/video";
 import { pickHlsPlaylistUrl, pickMjpegFeedUrl, toAbsoluteMediaUrl } from "../utils/videoStream";
 
@@ -309,14 +469,22 @@ const speed = ref(50);
 /** 循迹模式：锁定车体遥控、云台关节 6/7（与手册 car/control、车端云台策略一致） */
 const trackModeLocked = computed(() => (status.value?.drive_mode || "normal") === "track");
 
-const gimbalJ6 = ref(90);
-const gimbalJ7 = ref(60);
+/** 云台关节 6/7：普通控制默认与循迹前默认位（切循迹前会先下发循迹位） */
+const GIMBAL_PRESET_CONTROL = { j6: 110, j7: 95 };
+const GIMBAL_PRESET_TRACK = { j6: 110, j7: 145 };
+
+const gimbalTargetPreset = ref("control");
+const gimbalJ6 = ref(GIMBAL_PRESET_CONTROL.j6);
+const gimbalJ7 = ref(GIMBAL_PRESET_CONTROL.j7);
 const gimbalSpeed = ref(50);
 
-/** 方向控制 | 机械臂控制 */
+/** 切入循迹过程中屏蔽云台滑块/档位触发的二次下发，避免先 110/145 再回到旧角度 */
+const suppressGimbalAutoSend = ref(false);
+
+/** 方向控制 | 机械臂控制 | 程序动作 */
 const controlPanelMode = ref("vehicle");
 
-const armAngles = ref([110, 160, 180, 180, 90, 90]);
+const armAngles = ref([110, 180, 170, 150, 90, 90]);
 const armSpeed = ref(50);
 
 function setArmAngle(index, value) {
@@ -325,28 +493,290 @@ function setArmAngle(index, value) {
   armAngles.value = next;
 }
 
+/** 机械臂顺序动作：从关节 0 起依次下发，间隔与转速见 UI 说明 */
+const ARM_PRESET_STEP_MS = 1500;
+const STORAGE_ARM_RESET = "inspection_vehicle_arm_reset_angles_v1";
+/** 程序动作预设：写入 localStorage，同一浏览器与源站下下次打开仍会加载（勿清站点数据）。 */
+const STORAGE_ARM_PRESETS = "inspection_vehicle_arm_presets_v1";
+
+function defaultResetAngles() {
+  return [110, 180, 170, 150, 90, 90];
+}
+
+function clampJoint(v) {
+  const n = Math.round(Number(v));
+  return Math.max(0, Math.min(180, Number.isFinite(n) ? n : 0));
+}
+
+const armResetAngles = ref(defaultResetAngles());
+const armPresets = ref([]);
+const armSequenceRunning = ref(false);
+const resetAnglesDialogVisible = ref(false);
+const resetAnglesDraft = ref(defaultResetAngles());
+
+const jointIndexOptions = [0, 1, 2, 3, 4, 5];
+
+const addActionDialogVisible = ref(false);
+const addActionForm = reactive({
+  name: "",
+  angles: [...defaultResetAngles()],
+  jointOrder: [0, 1, 2, 3, 4, 5],
+  speed: 50,
+});
+
+function loadArmPresetStorage() {
+  try {
+    const rawR = localStorage.getItem(STORAGE_ARM_RESET);
+    if (rawR) {
+      const arr = JSON.parse(rawR);
+      if (Array.isArray(arr) && arr.length === 6) {
+        armResetAngles.value = arr.map(clampJoint);
+      }
+    }
+  } catch {
+    /* ignore */
+  }
+  try {
+    const rawP = localStorage.getItem(STORAGE_ARM_PRESETS);
+    if (rawP) {
+      const list = JSON.parse(rawP);
+      if (Array.isArray(list)) {
+        armPresets.value = list
+          .filter((x) => x && typeof x.name === "string" && Array.isArray(x.angles) && x.angles.length === 6)
+          .map((x, i) => {
+            const sp = Number(x.speed);
+            const fj = Number(x.firstJoint);
+            return {
+              id: x.id || `preset-${i}-${Date.now()}`,
+              name: String(x.name).trim(),
+              angles: x.angles.map(clampJoint),
+              jointOrder: normalizeStoredJointOrder(x.jointOrder, Number.isFinite(fj) ? fj : 0),
+              speed: Number.isFinite(sp) ? Math.max(0, Math.min(100, Math.round(sp))) : 50,
+            };
+          });
+        persistArmPresets();
+      }
+    }
+  } catch {
+    /* ignore */
+  }
+}
+
+function persistArmReset() {
+  try {
+    localStorage.setItem(STORAGE_ARM_RESET, JSON.stringify(armResetAngles.value));
+  } catch {
+    /* quota */
+  }
+}
+
+function persistArmPresets() {
+  try {
+    const payload = armPresets.value.map((p) => ({
+      id: p.id,
+      name: p.name,
+      angles: p.angles.map(clampJoint),
+      jointOrder: normalizeStoredJointOrder(p.jointOrder, p.firstJoint),
+      speed: clampArmSpeed(p.speed),
+    }));
+    localStorage.setItem(STORAGE_ARM_PRESETS, JSON.stringify(payload));
+  } catch {
+    /* quota */
+  }
+}
+
+function sleep(ms) {
+  return new Promise((resolve) => {
+    setTimeout(resolve, ms);
+  });
+}
+
+function clampArmSpeed(v) {
+  const n = Math.round(Number(v));
+  return Math.max(0, Math.min(100, Number.isFinite(n) ? n : 50));
+}
+
+/** 关节下发顺序：从 firstJoint 递增到 5，再回到 0..firstJoint-1（仅用于迁移旧预设） */
+function buildJointOrder(firstJoint) {
+  const f = Math.max(0, Math.min(5, Math.floor(Number(firstJoint)) || 0));
+  const order = [];
+  for (let k = f; k < 6; k += 1) order.push(k);
+  for (let k = 0; k < f; k += 1) order.push(k);
+  return order;
+}
+
+function isValidJointPermutation(order) {
+  if (!Array.isArray(order) || order.length !== 6) return false;
+  const nums = order.map((x) => Math.round(Number(x)));
+  if (nums.some((n) => !Number.isFinite(n) || n < 0 || n > 5)) return false;
+  return new Set(nums).size === 6;
+}
+
+/** 从存储读取：合法 jointOrder 直接用，否则用旧字段 firstJoint 推导 */
+function normalizeStoredJointOrder(rawOrder, firstJointFallback) {
+  if (isValidJointPermutation(rawOrder)) {
+    return rawOrder.map((x) => Math.max(0, Math.min(5, Math.round(Number(x)))));
+  }
+  const fj = Math.max(0, Math.min(5, Math.round(Number(firstJointFallback)) || 0));
+  return buildJointOrder(fj);
+}
+
+function resolveRunJointOrder(opts) {
+  if (opts && isValidJointPermutation(opts.jointOrder)) {
+    return opts.jointOrder.map((x) => Math.max(0, Math.min(5, Math.round(Number(x)))));
+  }
+  if (opts && opts.firstJoint !== undefined && opts.firstJoint !== null) {
+    return buildJointOrder(opts.firstJoint);
+  }
+  return [0, 1, 2, 3, 4, 5];
+}
+
+async function runArmSequentialToPose(targets, opts = {}) {
+  if (armSequenceRunning.value) return;
+  const t = targets.map(clampJoint);
+  if (t.length !== 6) {
+    ElMessage.error("需要 6 个关节角度（0°–180°）");
+    return;
+  }
+  const useSpeed =
+    opts.speed !== undefined && opts.speed !== null ? clampArmSpeed(opts.speed) : clampArmSpeed(armSpeed.value);
+  const order = resolveRunJointOrder(opts);
+  armSequenceRunning.value = true;
+  try {
+    for (let step = 0; step < order.length; step += 1) {
+      const k = order[step];
+      const body = { speed: useSpeed };
+      body[`joint_${k}_angle`] = t[k];
+      const ok = await sendArmPartial(body);
+      if (!ok) return;
+      setArmAngle(k, t[k]);
+      if (step < order.length - 1) await sleep(ARM_PRESET_STEP_MS);
+    }
+    ElMessage.success("动作已完成");
+  } finally {
+    armSequenceRunning.value = false;
+  }
+}
+
+function runResetSequence() {
+  runArmSequentialToPose(armResetAngles.value.slice(), {
+    jointOrder: [0, 1, 2, 3, 4, 5],
+    speed: armSpeed.value,
+  });
+}
+
+function runPresetSequence(p) {
+  if (!p?.angles) return;
+  runArmSequentialToPose(p.angles.slice(), {
+    jointOrder: p.jointOrder,
+    firstJoint: p.firstJoint,
+    speed: p.speed !== undefined && p.speed !== null ? p.speed : armSpeed.value,
+  });
+}
+
+function onResetButtonClick(e) {
+  if (e?.shiftKey) {
+    openResetAnglesDialog();
+    return;
+  }
+  runResetSequence();
+}
+
+function openResetAnglesDialog() {
+  resetAnglesDraft.value = armResetAngles.value.map((x) => clampJoint(x));
+  resetAnglesDialogVisible.value = true;
+}
+
+function saveResetAnglesFromDialog() {
+  armResetAngles.value = resetAnglesDraft.value.map(clampJoint);
+  persistArmReset();
+  resetAnglesDialogVisible.value = false;
+  ElMessage.success("已保存复位角度");
+}
+
+function openAddActionDialog() {
+  addActionForm.name = `动作${armPresets.value.length + 1}`;
+  const cur = armAngles.value.map(clampJoint);
+  for (let i = 0; i < 6; i += 1) addActionForm.angles[i] = cur[i];
+  resetAddActionJointOrder();
+  addActionForm.speed = clampArmSpeed(armSpeed.value);
+  addActionDialogVisible.value = true;
+}
+
+function resetAddActionJointOrder() {
+  for (let i = 0; i < 6; i += 1) addActionForm.jointOrder[i] = i;
+}
+
+function saveAddActionDialog() {
+  const name = String(addActionForm.name || "").trim();
+  if (!name) {
+    ElMessage.warning("请填写名称");
+    return;
+  }
+  const angles = addActionForm.angles.map(clampJoint);
+  const jointOrder = addActionForm.jointOrder.map((x) => Math.max(0, Math.min(5, Math.round(Number(x)))));
+  if (!isValidJointPermutation(jointOrder)) {
+    ElMessage.warning("关节顺序须为 0～5 各出现一次，请检查六步选择");
+    return;
+  }
+  const speed = clampArmSpeed(addActionForm.speed);
+  const id =
+    typeof crypto !== "undefined" && crypto.randomUUID
+      ? crypto.randomUUID()
+      : `preset-${Date.now()}-${Math.random().toString(36).slice(2, 9)}`;
+  armPresets.value = [...armPresets.value, { id, name, angles, jointOrder, speed }];
+  persistArmPresets();
+  addActionDialogVisible.value = false;
+  ElMessage.success("已保存");
+}
+
+function removePreset(id) {
+  armPresets.value = armPresets.value.filter((x) => x.id !== id);
+  persistArmPresets();
+  ElMessage.success("已删除");
+}
+
 async function sendGimbalPartial(body) {
   if (trackModeLocked.value) {
     ElMessage.warning("循迹模式中云台已锁定，请先切回「普通模式」");
-    return;
+    return false;
   }
   try {
     await vehicleApi.sendGimbal(body);
+    return true;
   } catch (e) {
     const msg = e?.response?.data?.detail;
     ElMessage.error(typeof msg === "string" ? msg : "云台下发失败，请确认 MQTT 已连接");
+    return false;
+  }
+}
+
+function onGimbalPresetChange(val) {
+  const p = val === "track" ? GIMBAL_PRESET_TRACK : GIMBAL_PRESET_CONTROL;
+  gimbalJ6.value = p.j6;
+  gimbalJ7.value = p.j7;
+  if (suppressGimbalAutoSend.value) return;
+  if (!trackModeLocked.value) {
+    sendGimbalPartial({
+      joint_6_angle: gimbalJ6.value,
+      joint_7_angle: gimbalJ7.value,
+      speed: gimbalSpeed.value,
+    });
   }
 }
 
 function onGimbalJ6Change() {
+  if (suppressGimbalAutoSend.value || trackModeLocked.value) return;
   sendGimbalPartial({ joint_6_angle: gimbalJ6.value, speed: gimbalSpeed.value });
 }
 
 function onGimbalJ7Change() {
+  if (suppressGimbalAutoSend.value || trackModeLocked.value) return;
   sendGimbalPartial({ joint_7_angle: gimbalJ7.value, speed: gimbalSpeed.value });
 }
 
 function onGimbalSpeedChange() {
+  if (suppressGimbalAutoSend.value || trackModeLocked.value) return;
   sendGimbalPartial({
     joint_6_angle: gimbalJ6.value,
     joint_7_angle: gimbalJ7.value,
@@ -357,9 +787,11 @@ function onGimbalSpeedChange() {
 async function sendArmPartial(body) {
   try {
     await vehicleApi.sendArmJoints(body);
+    return true;
   } catch (e) {
     const msg = e?.response?.data?.detail;
     ElMessage.error(typeof msg === "string" ? msg : "机械臂下发失败，请确认 MQTT 已连接");
+    return false;
   }
 }
 
@@ -468,7 +900,25 @@ async function refreshStatus() {
 async function setDriveMode(mode) {
   const cur = status.value?.drive_mode || "normal";
   if (cur === mode) return;
+  let trackGimbalFlow = false;
   try {
+    if (mode === "track" && cur !== "track") {
+      trackGimbalFlow = true;
+      suppressGimbalAutoSend.value = true;
+      gimbalJ6.value = GIMBAL_PRESET_TRACK.j6;
+      gimbalJ7.value = GIMBAL_PRESET_TRACK.j7;
+      gimbalTargetPreset.value = "track";
+      await nextTick();
+      const ok = await sendGimbalPartial({
+        joint_6_angle: GIMBAL_PRESET_TRACK.j6,
+        joint_7_angle: GIMBAL_PRESET_TRACK.j7,
+        speed: gimbalSpeed.value,
+      });
+      if (!ok) {
+        suppressGimbalAutoSend.value = false;
+        return;
+      }
+    }
     await vehicleApi.sendTrackMode({
       mode,
       timestamp: Math.floor(Date.now() / 1000),
@@ -479,7 +929,24 @@ async function setDriveMode(mode) {
         : "已切回普通模式，可使用键盘、面板与云台",
     );
     await refreshStatus();
+    await nextTick();
+    if (trackGimbalFlow) {
+      setTimeout(() => {
+        suppressGimbalAutoSend.value = false;
+      }, 200);
+    }
+    if (mode === "normal" && cur === "track") {
+      gimbalTargetPreset.value = "control";
+      gimbalJ6.value = GIMBAL_PRESET_CONTROL.j6;
+      gimbalJ7.value = GIMBAL_PRESET_CONTROL.j7;
+      await sendGimbalPartial({
+        joint_6_angle: gimbalJ6.value,
+        joint_7_angle: gimbalJ7.value,
+        speed: gimbalSpeed.value,
+      });
+    }
   } catch (e) {
+    if (trackGimbalFlow) suppressGimbalAutoSend.value = false;
     const msg = e?.response?.data?.detail;
     ElMessage.error(typeof msg === "string" ? msg : "模式切换失败，请确认 MQTT 与 Topic 配置");
   }
@@ -510,6 +977,7 @@ function handleKeydown(e) {
 }
 
 onMounted(async () => {
+  loadArmPresetStorage();
   await refreshStatus();
   await loadStreamConfig();
   window.addEventListener("keydown", handleKeydown);
@@ -770,6 +1238,14 @@ onUnmounted(() => {
   flex-direction: column;
   gap: 0;
 }
+.gimbal-preset-row {
+  flex-wrap: wrap;
+  align-items: center;
+}
+.gimbal-preset-rg {
+  flex: 1;
+  min-width: 0;
+}
 .param-row {
   display: flex;
   align-items: center;
@@ -816,24 +1292,36 @@ onUnmounted(() => {
 }
 .control-card-head {
   display: flex;
-  align-items: flex-start;
+  align-items: center;
   justify-content: space-between;
   gap: 8px;
   flex-wrap: wrap;
 }
-.control-card-head-titles {
-  display: flex;
-  flex-direction: column;
-  align-items: flex-start;
-  gap: 2px;
-  min-width: 0;
-  line-height: 1.3;
+.control-card-head--inline {
+  flex-wrap: nowrap;
+  gap: 6px;
 }
-.control-card-head-titles .card-head {
+.control-card-head-title {
+  flex: 0 1 auto;
+  min-width: 0;
   margin: 0;
+  font-size: 13px;
+  font-weight: 600;
+  line-height: 1.2;
+  white-space: nowrap;
 }
 .control-mode-toggle {
   flex-shrink: 0;
+}
+.control-mode-toggle--triple {
+  flex-wrap: nowrap;
+  justify-content: flex-end;
+  max-width: 100%;
+}
+.control-mode-toggle--triple :deep(.el-radio-button__inner) {
+  padding: 4px 6px;
+  font-size: 11px;
+  font-weight: 600;
 }
 .control-card :deep(.el-card__header) {
   padding: 5px 10px;
@@ -861,11 +1349,11 @@ onUnmounted(() => {
 }
 .dpad-center {
   flex: 1 1 0;
-  min-height: 160px;
+  min-height: 0;
   display: flex;
   align-items: center;
   justify-content: center;
-  padding: 8px 4px;
+  padding: 4px 2px 6px;
 }
 
 .dpad {
@@ -873,55 +1361,73 @@ onUnmounted(() => {
   flex-direction: column;
   align-items: center;
   justify-content: center;
-  gap: 10px;
+  gap: 6px;
   flex: 0 0 auto;
 }
 .dpad-row {
   display: flex;
-  gap: 12px;
+  gap: 6px;
   align-items: center;
   justify-content: center;
 }
 .layout-col--side .side-lower .dpad-cell {
-  width: 58px;
-  height: 58px;
+  width: 44px;
+  height: 44px;
   flex-shrink: 0;
 }
 .layout-col--side .side-lower .dpad-btn {
-  width: 54px;
-  height: 54px;
+  width: 40px;
+  height: 40px;
 }
 .layout-col--side .side-lower .stop-btn {
-  width: 54px;
-  height: 54px;
+  width: 42px;
+  height: 42px;
 }
 
 .dpad-cell {
-  width: 58px;
-  height: 58px;
+  width: 44px;
+  height: 44px;
   display: flex;
   align-items: center;
   justify-content: center;
 }
 .dpad-btn {
-  width: 52px;
-  height: 52px;
+  width: 40px;
+  height: 40px;
+  min-height: 40px;
   display: flex;
   flex-direction: column;
   align-items: center;
   justify-content: center;
-  border-radius: 8px;
-  padding: 4px;
+  border-radius: 6px;
+  padding: 2px 3px;
+}
+.dpad-btn :deep(.el-button__content) {
+  flex-direction: column;
+  gap: 0;
+  line-height: 1.05;
+}
+.dpad-btn :deep(.el-icon) {
+  margin: 0;
 }
 .dpad-label {
   font-size: 10px;
-  margin-top: 2px;
-  line-height: 1;
+  font-weight: 700;
+  letter-spacing: 0.02em;
+  margin-top: 1px;
+  line-height: 1.05;
+  color: #fff;
+  text-shadow: 0 1px 1px rgba(0, 0, 0, 0.35);
+}
+.stop-btn .dpad-label {
+  color: #1d2129;
+  text-shadow: 0 1px 0 rgba(255, 255, 255, 0.35);
 }
 .stop-btn {
   border-radius: 50%;
-  width: 54px;
-  height: 54px;
+  width: 42px;
+  height: 42px;
+  min-height: 42px;
 }
 
 .arm-control-body {
@@ -956,6 +1462,367 @@ onUnmounted(() => {
 }
 .arm-slider-wrap :deep(.el-slider__button) {
   border-color: #722ed1;
+}
+
+.arm-actions-panel {
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  padding: 6px 2px 8px;
+  overflow: hidden;
+}
+.arm-actions-toolbar {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+  flex-shrink: 0;
+  padding: 0 2px;
+}
+.arm-toolbar-reset {
+  flex: 1;
+  height: 38px;
+  border-radius: 8px;
+  font-weight: 600;
+  font-size: 13px;
+  letter-spacing: 0.02em;
+  border: none;
+  background: linear-gradient(135deg, #722ed1 0%, #531dab 100%);
+  box-shadow: 0 2px 6px rgba(114, 46, 209, 0.28);
+}
+.arm-toolbar-reset:hover {
+  filter: brightness(1.08);
+  box-shadow: 0 3px 10px rgba(114, 46, 209, 0.36);
+}
+.arm-toolbar-plus {
+  height: 38px !important;
+  padding: 0 14px !important;
+  margin: 0 !important;
+  border-radius: 8px;
+  font-weight: 600;
+  font-size: 13px;
+  color: #722ed1;
+  background: rgba(114, 46, 209, 0.08);
+  border: 1.5px solid rgba(114, 46, 209, 0.25);
+  transition: all 0.2s ease;
+}
+.arm-toolbar-plus:hover {
+  background: rgba(114, 46, 209, 0.14);
+  border-color: rgba(114, 46, 209, 0.4);
+  color: #531dab;
+}
+.arm-toolbar-plus span {
+  margin-left: 3px;
+}
+.arm-actions-scroll {
+  flex: 1 1 auto;
+  min-height: 80px;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+.arm-actions-saved {
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  padding: 2px 2px 4px;
+}
+.arm-saved-card {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  padding: 8px 10px;
+  background: linear-gradient(135deg, #faf8ff 0%, #f5f0ff 100%);
+  border-radius: 8px;
+  border: 1px solid rgba(114, 46, 209, 0.12);
+  transition: all 0.2s ease;
+}
+.arm-saved-card:hover {
+  border-color: rgba(114, 46, 209, 0.3);
+  box-shadow: 0 2px 8px rgba(114, 46, 209, 0.1);
+  background: linear-gradient(135deg, #f5f0ff 0%, #efe6fb 100%);
+}
+.arm-saved-info {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex: 1;
+  min-width: 0;
+}
+.arm-saved-icon {
+  flex-shrink: 0;
+  width: 24px;
+  height: 24px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 10px;
+  color: #722ed1;
+  background: rgba(114, 46, 209, 0.1);
+  border-radius: 6px;
+}
+.arm-saved-name {
+  font-size: 13px;
+  font-weight: 600;
+  color: #303133;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.arm-saved-actions {
+  display: flex;
+  align-items: center;
+  gap: 2px;
+  flex-shrink: 0;
+}
+.arm-saved-run {
+  border-radius: 6px !important;
+  font-weight: 600 !important;
+  font-size: 12px !important;
+  padding: 4px 12px !important;
+  height: 28px !important;
+  background: linear-gradient(135deg, #722ed1 0%, #531dab 100%) !important;
+  border: none !important;
+  box-shadow: 0 1px 4px rgba(114, 46, 209, 0.25);
+}
+.arm-saved-run:hover {
+  filter: brightness(1.08);
+}
+.arm-saved-del {
+  flex-shrink: 0;
+  font-weight: 500;
+  font-size: 12px !important;
+  padding: 4px 6px !important;
+}
+.arm-actions-empty {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  min-height: 90px;
+  padding: 20px 12px;
+  border-radius: 10px;
+  border: 1.5px dashed rgba(114, 46, 209, 0.18);
+  background: rgba(250, 248, 255, 0.5);
+}
+.arm-actions-empty-icon {
+  width: 44px;
+  height: 44px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 50%;
+  background: rgba(114, 46, 209, 0.06);
+}
+.arm-actions-empty-text {
+  font-size: 13px;
+  color: #606266;
+  font-weight: 500;
+}
+.arm-actions-empty-hint {
+  font-size: 11px;
+  color: #909399;
+}
+
+.add-action-dialog :deep(.el-dialog) {
+  border-radius: 14px;
+  overflow: hidden;
+}
+.add-action-dialog :deep(.el-dialog__header) {
+  padding: 16px 20px 12px;
+  margin-right: 0;
+  border-bottom: 1px solid #f0e6ff;
+  background: linear-gradient(135deg, #faf8ff 0%, #f3eaff 100%);
+}
+.add-action-dialog :deep(.el-dialog__title) {
+  font-weight: 700;
+  font-size: 15px;
+  color: #303133;
+}
+.add-action-dialog :deep(.el-dialog__body) {
+  padding: 16px 20px 8px;
+}
+.add-action-form :deep(.el-form-item__label) {
+  font-weight: 600;
+  font-size: 13px;
+  color: #303133;
+}
+.add-action-name-item {
+  margin-bottom: 14px;
+}
+.add-action-section {
+  margin-bottom: 12px;
+}
+.add-action-section--boxed {
+  padding: 12px;
+  border-radius: 10px;
+  background: #faf8ff;
+  border: 1px solid rgba(114, 46, 209, 0.1);
+}
+.add-action-section-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  margin-bottom: 10px;
+}
+.add-action-section-title {
+  font-size: 12px;
+  font-weight: 700;
+  color: #722ed1;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  margin-bottom: 8px;
+  display: block;
+}
+.add-action-section-head .add-action-section-title {
+  margin-bottom: 0;
+}
+.joint-order-grid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 8px 10px;
+}
+.joint-order-cell {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+.joint-order-badge {
+  flex-shrink: 0;
+  min-width: 22px;
+  height: 22px;
+  padding: 0 5px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 11px;
+  font-weight: 700;
+  color: #fff;
+  background: linear-gradient(135deg, #722ed1 0%, #531dab 100%);
+  border-radius: 6px;
+}
+.joint-order-select {
+  width: 100% !important;
+}
+.add-action-speed-wrap {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+.add-action-speed-wrap .el-slider {
+  flex: 1;
+}
+.add-action-speed-wrap :deep(.el-slider__runway) {
+  background-color: rgba(114, 46, 209, 0.12);
+}
+.add-action-speed-wrap :deep(.el-slider__bar) {
+  background-color: #722ed1;
+}
+.add-action-speed-wrap :deep(.el-slider__button) {
+  border-color: #722ed1;
+}
+.add-action-speed-val {
+  flex-shrink: 0;
+  min-width: 32px;
+  text-align: right;
+  font-size: 13px;
+  font-weight: 600;
+  color: #531dab;
+}
+.add-action-angles-grid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 8px 10px;
+}
+.add-action-angle-cell {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+.add-action-angle-label {
+  font-size: 12px;
+  font-weight: 700;
+  color: #722ed1;
+  flex-shrink: 0;
+  min-width: 20px;
+}
+.add-action-angle-input {
+  width: 100% !important;
+}
+.add-action-dialog-footer {
+  display: flex;
+  justify-content: flex-end;
+  gap: 10px;
+  width: 100%;
+}
+.add-action-dialog-footer .el-button--primary {
+  background: linear-gradient(135deg, #722ed1 0%, #531dab 100%);
+  border: none;
+  box-shadow: 0 2px 6px rgba(114, 46, 209, 0.25);
+}
+
+.arm-presets-block {
+  margin-top: 8px;
+  padding-top: 8px;
+  border-top: 1px solid #f0e6ff;
+}
+.arm-presets-head {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  margin-bottom: 6px;
+}
+.arm-presets-title {
+  font-size: 12px;
+  font-weight: 600;
+  color: #531dab;
+}
+.arm-presets-hint {
+  line-height: 1.35;
+}
+.arm-presets-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin-bottom: 6px;
+}
+.arm-presets-chips {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+.arm-preset-item {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  flex-wrap: wrap;
+}
+.arm-presets-empty {
+  padding: 4px 0;
+}
+.reset-angles-grid {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+.reset-angle-item {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+.reset-angle-label {
+  font-size: 13px;
+  color: #606266;
+  flex-shrink: 0;
 }
 
 /* 窄屏：纵向堆叠 */

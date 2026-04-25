@@ -34,7 +34,12 @@ class GimbalControlRequest(BaseModel):
     """
 
     joint_6_angle: Optional[int] = Field(default=None, ge=0, le=180, description="6 号关节目标角度")
-    joint_7_angle: Optional[int] = Field(default=None, ge=0, le=90, description="7 号关节目标角度（超过 90° 易卡舵机）")
+    joint_7_angle: Optional[int] = Field(
+        default=None,
+        ge=0,
+        le=145,
+        description="7 号关节目标角度（0–145°；大角度时请确认舵机行程与结构不干涉）",
+    )
     speed: Optional[int] = Field(default=None, ge=0, le=100, description="转动速度 0~100；缺省时按 50")
 
     @model_validator(mode="after")

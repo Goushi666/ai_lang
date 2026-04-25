@@ -5,6 +5,7 @@ from __future__ import annotations
 import asyncio
 import logging
 from typing import Any, AsyncIterator, Dict, List, Optional
+from urllib.parse import quote
 
 from app.core.config import settings
 
@@ -13,6 +14,7 @@ from app.schemas.agent import (
     ChatResponse,
     ClarificationOption as SchemaClarificationOption,
     ClarificationPayload,
+    ExportDownloadItem,
 )
 
 from .clarifier import Clarifier
@@ -21,8 +23,28 @@ from .llm.client import LLMClient, LLMResponse
 from .llm.prompts import get_system_prompt
 from .skills import SkillRegistry
 from .tools import ToolRegistry
+from .tools.base import ToolResult
 
 logger = logging.getLogger(__name__)
+
+
+_EXPORT_DOWNLOAD_TOOL_NAMES = frozenset(
+    {"export_csv_file", "export_sensor_history_csv", "export_alarms_history_csv"},
+)
+
+
+def _export_download_from_tool_result(tool_name: str, result: ToolResult) -> Optional[Dict[str, str]]:
+    if tool_name not in _EXPORT_DOWNLOAD_TOOL_NAMES or not result.ok:
+        return None
+    data = result.data or {}
+    fn = data.get("filename")
+    if not isinstance(fn, str) or not fn.strip():
+        return None
+    fn = fn.strip()
+    return {
+        "filename": fn,
+        "download_path": f"/api/agent/export-download?filename={quote(fn, safe='')}",
+    }
 
 
 async def _emit_sse_text_fragments(
@@ -367,6 +389,7 @@ class AgentService:
         final_content = ""
         final_reasoning: Optional[str] = None
         usage: Dict[str, int] = {}
+        collected_exports: List[ExportDownloadItem] = []
 
         for _round in range(self._max_tool_rounds):
             llm_resp: LLMResponse = await self._llm.chat_completion(
@@ -401,6 +424,9 @@ class AgentService:
                     tool_args = {}
 
                 result = await self._tools.execute(tool_name, **tool_args)
+                link = _export_download_from_tool_result(tool_name, result)
+                if link:
+                    collected_exports.append(ExportDownloadItem(**link))
 
                 llm_messages.append({
                     "role": "tool",
@@ -424,6 +450,7 @@ class AgentService:
             reasoning=final_reasoning,
             usage=usage or None,
             conversation_title=conv_title,
+            exports=collected_exports,
         )
 
     async def chat_sse_events(
@@ -559,6 +586,14 @@ class AgentService:
                 except Exception:
                     tool_args = {}
                 result = await self._tools.execute(tool_name, **tool_args)
+                link = _export_download_from_tool_result(tool_name, result)
+                if link:
+                    yield {
+                        "type": "export_ready",
+                        "session_id": session.id,
+                        "filename": link["filename"],
+                        "download_path": link["download_path"],
+                    }
                 llm_messages.append({
                     "role": "tool",
                     "tool_call_id": tc.get("id", ""),

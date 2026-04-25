@@ -127,6 +127,7 @@ def get_session_factory() -> async_sessionmaker[AsyncSession]:
 async def init_db() -> None:
     """创建缺失的 ORM 表。"""
     from app.models.agent_chat import AgentConversation, AgentMessage  # noqa: F401
+    from app.models.alarm import Alarm  # noqa: F401
     from app.models.environment_anomaly import EnvironmentAnomaly  # noqa: F401
     from app.models.sensor import SensorData  # noqa: F401
 

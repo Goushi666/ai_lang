@@ -11,6 +11,7 @@
 import asyncio
 import logging
 from datetime import datetime, timedelta, timezone
+from pathlib import Path
 
 from fastapi import FastAPI, WebSocket
 from fastapi.middleware.cors import CORSMiddleware
@@ -44,6 +45,17 @@ from app.services.agent.tools.sensor_tools import GetSensorLatest, GetSensorHist
 from app.services.agent.tools.alarm_tools import GetAlarmsHistory, GetAlarmConfig
 from app.services.agent.tools.analysis_tools import GetEnvironmentAnalysis
 from app.services.agent.tools.knowledge_tools import SearchKnowledgeBase
+from app.services.agent.tools.csv_export_tools import (
+    ExportAlarmsHistoryCsv,
+    ExportCsvFile,
+    ExportSensorHistoryCsv,
+)
+from app.services.agent.tools.time_tools import GetCurrentTime
+from app.services.agent.tools.vehicle_tools import (
+    ControlArmJoints,
+    ControlVehicle,
+    GetVehicleStatus,
+)
 from app.services.agent.skills import SkillRegistry
 from app.services.agent.skills.env_diagnosis import EnvDiagnosisSkill
 from app.services.agent.llm import LLMClient
@@ -121,7 +133,10 @@ def create_app() -> FastAPI:
         app.state.sensor_repo = sensor_repo
         env_anomaly_repo = EnvironmentAnomalyRepository(session_factory)
         app.state.environment_anomaly_repo = env_anomaly_repo
-        alarm_repo = AlarmRepository()
+        alarm_repo = AlarmRepository(
+            session_factory,
+            environment_anomaly_repo=env_anomaly_repo,
+        )
         app.state.alarm_repo = alarm_repo
         alarm_service = AlarmService(
             repo=alarm_repo,
@@ -141,6 +156,20 @@ def create_app() -> FastAPI:
             max_messages=settings.AGENT_SESSION_MAX_MESSAGES,
         )
         tool_registry = ToolRegistry()
+        tool_registry.register(GetCurrentTime(display_timezone=settings.AGENT_TIME_DISPLAY_TZ))
+        _backend_root = Path(__file__).resolve().parent.parent
+        _csv_export_dir = (_backend_root / settings.AGENT_CSV_EXPORT_DIR.replace("\\", "/").lstrip("./")).resolve()
+        tool_registry.register(
+            ExportCsvFile(_csv_export_dir, max_rows=settings.AGENT_CSV_EXPORT_MAX_ROWS),
+        )
+        tool_registry.register(ExportSensorHistoryCsv(_csv_export_dir, sensor_service))
+        tool_registry.register(
+            ExportAlarmsHistoryCsv(
+                _csv_export_dir,
+                alarm_repo,
+                max_rows=settings.AGENT_CSV_EXPORT_MAX_ROWS,
+            ),
+        )
         tool_registry.register(GetSensorLatest(sensor_service))
         tool_registry.register(GetSensorHistory(sensor_service))
         tool_registry.register(GetAlarmsHistory(alarm_repo))
@@ -150,6 +179,10 @@ def create_app() -> FastAPI:
             from app.services.analysis_service import AnalysisService as _AS
             _analysis_svc = _AS(sensor_repo=sensor_repo, alarm_service=alarm_service)
             tool_registry.register(GetEnvironmentAnalysis(_analysis_svc))
+
+        tool_registry.register(ControlArmJoints(app.state.vehicle_service))
+        tool_registry.register(ControlVehicle(app.state.vehicle_service))
+        tool_registry.register(GetVehicleStatus(app.state.vehicle_service))
 
         app.state.knowledge_service = None
         try:
@@ -177,8 +210,16 @@ def create_app() -> FastAPI:
             base_url=settings.LLM_BASE_URL,
             model=settings.LLM_MODEL,
         )
-        clarifier = Clarifier(enabled=settings.AGENT_CLARIFICATION_ENABLED)
+        clarifier = Clarifier(
+            enabled=settings.AGENT_CLARIFICATION_ENABLED,
+            llm_client=llm_client,
+            min_clarity=settings.AGENT_CLARIFICATION_MIN_CLARITY,
+            judge_timeout_sec=settings.AGENT_CLARIFICATION_JUDGE_TIMEOUT_SEC,
+            clarify_timeout_sec=settings.AGENT_CLARIFICATION_CLARIFY_TIMEOUT_SEC,
+            max_options=settings.AGENT_CLARIFICATION_MAX_OPTIONS,
+        )
 
+        app.state.agent_csv_export_dir = _csv_export_dir
         app.state.agent_service = AgentService(
             session_manager=session_manager,
             tool_registry=tool_registry,

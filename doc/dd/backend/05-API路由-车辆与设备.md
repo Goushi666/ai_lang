@@ -9,7 +9,7 @@
 | POST | `/control` | 小车方向控制：`action`、`speed`、`timestamp`；可选 **duration**（持续时间，与车端协议一致） |
 | GET | `/status` | 返回 `VehicleStatusResponse`（含 **drive_mode**：`normal` \| `track` 等） |
 | POST | `/track` | **循迹模式切换**：`mode`=`normal` \| `track`，经 MQTT `car/control/track` |
-| POST | `/gimbal` | **云台**：关节 **6**（如 0–180°）、关节 **7**（如 0–90°）、`speed`；循迹模式下 **409** |
+| POST | `/gimbal` | **云台**：关节 **6**（如 0–180°）、关节 **7**（如 0–145°）、`speed`；循迹模式下 **409** |
 | POST | `/arm` | **机械臂**：关节 **0–5**（0–180°）、`speed` |
 
 **drive_mode**：`normal` 表示可手动控制；`track` 为循迹，服务端会拒绝手动方向/云台（与实现一致）。

@@ -24,6 +24,9 @@ env/
 backend/app.db
 backend/app.db-*
 
+# Agent 工具导出的 CSV（可由运行期生成）
+backend/data/agent_exports/
+
 
 # Node / Frontend
 node_modules/

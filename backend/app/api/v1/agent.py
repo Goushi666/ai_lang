@@ -10,7 +10,7 @@ from pathlib import Path
 from typing import Optional
 
 from fastapi import APIRouter, Depends, HTTPException, Request
-from fastapi.responses import StreamingResponse
+from fastapi.responses import FileResponse, StreamingResponse
 
 from app.core.config import settings
 from app.deps import agent_chat_repo_dep, agent_service_dep, knowledge_service_dep
@@ -30,6 +30,31 @@ from app.services.knowledge import KnowledgeService
 router = APIRouter()
 
 _BACKEND_ROOT = Path(__file__).resolve().parents[3]
+
+
+@router.get("/export-download", summary="下载 Agent 导出的 CSV（浏览器另存为）")
+async def agent_export_csv_download(filename: str, request: Request):
+    """文件名经与导出工具相同规则校验，且路径限制在 AGENT_CSV_EXPORT_DIR 下。"""
+    _check_enabled()
+    root = getattr(request.app.state, "agent_csv_export_dir", None)
+    if root is None:
+        raise HTTPException(status_code=503, detail="导出目录未初始化")
+    from app.services.agent.tools.csv_export_tools import _sanitize_filename
+
+    safe_name = _sanitize_filename(filename)
+    root_p = Path(str(root)).resolve()
+    target = (root_p / safe_name).resolve()
+    try:
+        target.relative_to(root_p)
+    except ValueError:
+        raise HTTPException(status_code=404, detail="文件不存在")
+    if not target.is_file():
+        raise HTTPException(status_code=404, detail="文件不存在或已过期")
+    return FileResponse(
+        path=str(target),
+        filename=safe_name,
+        media_type="text/csv; charset=utf-8",
+    )
 
 
 def _check_enabled() -> None:
@@ -93,7 +118,7 @@ async def agent_chat_stream(
     body: ChatRequest,
     service: AgentService = Depends(agent_service_dep),
 ):
-    """``data:`` 每行为 JSON：``clarification`` | ``delta`` | ``done``。"""
+    """``data:`` 每行为 JSON：``clarification`` | ``delta`` | ``export_ready`` | ``done``。"""
     _check_enabled()
     if not settings.AGENT_STREAM_ENABLED:
         raise HTTPException(status_code=503, detail="流式输出已关闭（AGENT_STREAM_ENABLED=false）")
