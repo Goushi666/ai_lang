@@ -17,9 +17,9 @@
         <el-menu
           :default-active="currentRoute"
           router
-          background-color="#304156"
-          text-color="#bfcbd9"
-          active-text-color="#409EFF"
+          background-color="#1e293b"
+          text-color="#94a3b8"
+          active-text-color="#60a5fa"
         >
           <el-menu-item index="/">
             <el-icon><Monitor /></el-icon>
@@ -143,7 +143,9 @@ html, body, #app {
   margin: 0;
   padding: 0;
   height: 100%;
-  font-family: "Helvetica Neue", Helvetica, "PingFang SC", "Hiragino Sans GB", "Microsoft YaHei", Arial, sans-serif;
+  font-family: var(--ds-font-sans);
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
 }
 
 .app-layout {
@@ -159,50 +161,96 @@ html, body, #app {
 }
 
 .app-header {
-  background-color: #1d2b3a;
-  color: #fff;
+  background: var(--ds-bg-header);
+  color: var(--ds-text-inverse);
   display: flex;
   align-items: center;
   justify-content: space-between;
-  padding: 0 20px;
-  height: 56px;
-  box-shadow: 0 1px 4px rgba(0, 0, 0, .15);
+  padding: 0 var(--ds-space-5);
+  height: 52px;
+  box-shadow: 0 1px 0 rgba(255, 255, 255, 0.06);
+  z-index: 10;
 }
 
 .logo-title {
-  font-size: 18px;
-  font-weight: 600;
-  letter-spacing: 1px;
+  font-size: 16px;
+  font-weight: 700;
+  letter-spacing: 0.5px;
+  background: linear-gradient(135deg, #e0f2fe, #bfdbfe);
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  background-clip: text;
 }
 
 .header-right {
   display: flex;
   align-items: center;
-  gap: 6px;
-  font-size: 13px;
+  gap: var(--ds-space-2);
+  font-size: var(--ds-text-sm);
+  color: var(--ds-text-muted);
 }
 
 .status-dot {
-  width: 8px;
-  height: 8px;
-  border-radius: 50%;
+  width: 7px;
+  height: 7px;
+  border-radius: var(--ds-radius-full);
   display: inline-block;
 }
-.status-dot.online  { background: #67c23a; }
-.status-dot.offline { background: #f56c6c; }
+.status-dot.online  {
+  background: var(--ds-success);
+  box-shadow: 0 0 6px rgba(16, 185, 129, 0.5);
+}
+.status-dot.offline {
+  background: var(--ds-danger);
+  box-shadow: 0 0 6px rgba(239, 68, 68, 0.4);
+}
 
 .app-aside {
-  background-color: #304156;
+  background: var(--ds-bg-sidebar);
   overflow-y: auto;
+  width: 200px;
+  border-right: 1px solid rgba(255, 255, 255, 0.06);
 }
 
 .app-aside .el-menu {
   border-right: none;
+  padding-top: var(--ds-space-2);
+}
+
+.app-aside .el-menu-item {
+  height: 44px;
+  line-height: 44px;
+  margin: 2px 8px;
+  border-radius: var(--ds-radius-sm);
+  font-size: var(--ds-text-base);
+  transition: all var(--ds-transition);
+}
+
+.app-aside .el-menu-item:hover {
+  background: rgba(255, 255, 255, 0.06) !important;
+}
+
+.app-aside .el-menu-item.is-active {
+  background: rgba(59, 130, 246, 0.15) !important;
+  color: var(--ds-primary-light) !important;
+  font-weight: 500;
+  position: relative;
+}
+
+.app-aside .el-menu-item.is-active::before {
+  content: "";
+  position: absolute;
+  left: 0;
+  top: 8px;
+  bottom: 8px;
+  width: 3px;
+  border-radius: 0 2px 2px 0;
+  background: var(--ds-primary);
 }
 
 .app-main {
-  background-color: #f0f2f5;
-  padding: 20px;
+  background-color: var(--ds-bg-page);
+  padding: var(--ds-space-5);
   overflow-y: auto;
   flex: 1;
   min-width: 0;
@@ -211,22 +259,21 @@ html, body, #app {
 
 .app-main--dashboard {
   overflow: hidden;
-  padding: 8px 10px;
+  padding: var(--ds-space-2) var(--ds-space-3);
   display: flex;
   flex-direction: column;
 }
 
 .app-main--inspection {
   overflow: hidden;
-  padding: 10px 12px;
+  padding: var(--ds-space-3);
   display: flex;
   flex-direction: column;
 }
 
-/* 智能助手：主内容区不整体滚动，由页内消息列表单独滚动 */
 .app-main--agent {
   overflow: hidden;
-  padding: 16px 20px 20px;
+  padding: var(--ds-space-4) var(--ds-space-5) var(--ds-space-5);
   display: flex;
   flex-direction: column;
   min-height: 0;
@@ -241,7 +288,6 @@ html, body, #app {
   overflow: hidden;
 }
 
-/* 巡检页根节点参与 flex 高度链，使主区域占满且不撑出滚动条 */
 .app-main--inspection .app-main-route--fill {
   flex: 1;
   min-height: 0;

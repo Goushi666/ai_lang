@@ -125,51 +125,54 @@ onMounted(load);
 
 <style scoped>
 .page-title {
-  margin: 0 0 20px 0;
-  font-size: 20px;
-  color: #303133;
+  margin: 0 0 var(--ds-space-5) 0;
+  font-size: var(--ds-text-xl);
+  font-weight: 700;
+  color: var(--ds-text-primary);
 }
 .settings-card {
-  border-radius: 8px;
+  border-radius: var(--ds-radius-md);
   max-width: 640px;
-  margin-bottom: 16px;
+  margin-bottom: var(--ds-space-4);
+  border: 1px solid var(--ds-border-light);
 }
 .danger-zone :deep(.el-card__header) {
-  color: #b71c1c;
+  color: #b91c1c;
   font-weight: 600;
 }
 .danger-hint {
-  font-size: 12px;
-  color: #606266;
+  font-size: var(--ds-text-sm);
+  color: var(--ds-text-secondary);
   line-height: 1.6;
-  margin: 0 0 12px 0;
+  margin: 0 0 var(--ds-space-3) 0;
 }
 .danger-hint code {
-  font-size: 11px;
+  font-size: var(--ds-text-xs);
   padding: 1px 4px;
-  background: #fef0f0;
+  background: var(--ds-danger-light);
   border-radius: 3px;
+  font-family: var(--ds-font-mono);
 }
 .purge-checks {
   display: flex;
   flex-direction: column;
-  gap: 8px;
-  margin-bottom: 14px;
+  gap: var(--ds-space-2);
+  margin-bottom: var(--ds-space-3);
 }
 .btn-purge-solid {
-  background-color: #c62828 !important;
-  border-color: #c62828 !important;
+  background-color: #dc2626 !important;
+  border-color: #dc2626 !important;
   color: #fff !important;
 }
 .btn-purge-solid:hover,
 .btn-purge-solid:focus {
-  background-color: #e53935 !important;
-  border-color: #e53935 !important;
+  background-color: #ef4444 !important;
+  border-color: #ef4444 !important;
   color: #fff !important;
 }
 .btn-purge-solid:active {
-  background-color: #b71c1c !important;
-  border-color: #b71c1c !important;
+  background-color: #b91c1c !important;
+  border-color: #b91c1c !important;
   color: #fff !important;
 }
 .btn-purge-solid.is-disabled {

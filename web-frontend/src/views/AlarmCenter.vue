@@ -308,75 +308,78 @@ onMounted(() => {
 
 <style scoped>
 .page-title {
-  margin: 0 0 12px 0;
-  font-size: 20px;
-  color: #303133;
+  margin: 0 0 var(--ds-space-3) 0;
+  font-size: var(--ds-text-xl);
+  font-weight: 700;
+  color: var(--ds-text-primary);
 }
 
 .page-hint {
-  margin: 0 0 16px 0;
-  font-size: 12px;
-  color: #909399;
+  margin: 0 0 var(--ds-space-4) 0;
+  font-size: var(--ds-text-sm);
+  color: var(--ds-text-muted);
   line-height: 1.5;
 }
 
 .page-hint code {
-  font-size: 11px;
+  font-size: var(--ds-text-xs);
   padding: 1px 4px;
-  background: #f4f4f5;
+  background: var(--ds-bg-inset);
   border-radius: 3px;
+  font-family: var(--ds-font-mono);
 }
 .page-hint-sub {
   display: block;
-  margin-top: 6px;
-  color: #a8abb2;
+  margin-top: var(--ds-space-2);
+  color: var(--ds-text-muted);
 }
 .page-hint-sub code {
-  font-size: 11px;
+  font-size: var(--ds-text-xs);
 }
 
 .filter-card {
-  margin-bottom: 16px;
-  border-radius: 8px;
+  margin-bottom: var(--ds-space-4);
+  border-radius: var(--ds-radius-md);
+  border: 1px solid var(--ds-border-light);
 }
 
 .table-card {
-  border-radius: 8px;
+  border-radius: var(--ds-radius-md);
+  border: 1px solid var(--ds-border-light);
 }
 
 .filter-actions {
   display: flex;
   flex-wrap: wrap;
   align-items: center;
-  gap: 8px;
+  gap: var(--ds-space-2);
 }
 
 .pager-wrap {
   display: flex;
   justify-content: flex-end;
-  margin-top: 16px;
-  padding-top: 8px;
+  margin-top: var(--ds-space-4);
+  padding-top: var(--ds-space-2);
 }
 
-/* 实心红底白字，悬停略浅 */
 .table-card :deep(.btn-danger-solid.el-button--danger),
 .filter-actions :deep(.btn-danger-solid.el-button--danger) {
-  --el-button-bg-color: #c62828;
-  --el-button-border-color: #c62828;
-  --el-button-hover-bg-color: #e53935;
-  --el-button-hover-border-color: #e53935;
-  --el-button-active-bg-color: #b71c1c;
-  --el-button-active-border-color: #b71c1c;
-  background-color: #c62828 !important;
-  border-color: #c62828 !important;
+  --el-button-bg-color: #dc2626;
+  --el-button-border-color: #dc2626;
+  --el-button-hover-bg-color: #ef4444;
+  --el-button-hover-border-color: #ef4444;
+  --el-button-active-bg-color: #b91c1c;
+  --el-button-active-border-color: #b91c1c;
+  background-color: #dc2626 !important;
+  border-color: #dc2626 !important;
   color: #fff !important;
 }
 .table-card :deep(.btn-danger-solid.el-button--danger:hover),
 .table-card :deep(.btn-danger-solid.el-button--danger:focus),
 .filter-actions :deep(.btn-danger-solid.el-button--danger:hover),
 .filter-actions :deep(.btn-danger-solid.el-button--danger:focus) {
-  background-color: #e53935 !important;
-  border-color: #e53935 !important;
+  background-color: #ef4444 !important;
+  border-color: #ef4444 !important;
   color: #fff !important;
 }
 .table-card :deep(.btn-danger-solid.el-button--danger.is-disabled),
