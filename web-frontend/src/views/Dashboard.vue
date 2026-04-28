@@ -1011,19 +1011,22 @@ onUnmounted(() => {
 }
 
 .dash-title {
-  margin: 0 0 var(--ds-space-2) 0;
-  font-size: 15px;
-  font-weight: 700;
+  margin: 0 0 var(--ds-space-3) 0;
+  padding-left: 10px;
+  border-left: 4px solid #3b82f6;
+  font-size: 20px;
+  font-weight: 800;
   color: var(--ds-text-primary);
   line-height: 1.2;
   flex-shrink: 0;
+  letter-spacing: 0.02em;
 }
 
 .dash-grid {
   flex: 1;
   min-height: 0;
   display: grid;
-  gap: var(--ds-space-3);
+  gap: var(--ds-space-4);
   grid-template-columns: 1fr 1fr 1fr;
   grid-template-rows: auto minmax(0, 1fr) auto;
   grid-template-areas:
@@ -1038,11 +1041,12 @@ onUnmounted(() => {
 .g-m3 { grid-area: m3; }
 
 .metric-card {
-  border-radius: var(--ds-radius-md);
+  border-radius: 14px;
   border: 1px solid var(--ds-border-light);
-  transition: box-shadow var(--ds-transition);
+  transition: transform var(--ds-transition), box-shadow var(--ds-transition);
 }
 .metric-card:hover {
+  transform: translateY(-2px);
   box-shadow: var(--ds-shadow-md);
 }
 .metric-card :deep(.el-card__body) {
@@ -1094,7 +1098,7 @@ onUnmounted(() => {
 /* ── Chart Cards ── */
 .g-ct {
   grid-area: ct;
-  border-radius: var(--ds-radius-md);
+  border-radius: 14px;
   min-height: 0;
   display: flex;
   flex-direction: column;
@@ -1102,7 +1106,7 @@ onUnmounted(() => {
 }
 .g-ch {
   grid-area: ch;
-  border-radius: var(--ds-radius-md);
+  border-radius: 14px;
   min-height: 0;
   display: flex;
   flex-direction: column;
@@ -1194,7 +1198,7 @@ onUnmounted(() => {
 /* ── Broadcast Card ── */
 .g-bc {
   grid-area: bc;
-  border-radius: var(--ds-radius-md);
+  border-radius: 14px;
   flex-shrink: 0;
   border: 1px solid var(--ds-border-light);
 }
@@ -1295,7 +1299,7 @@ onUnmounted(() => {
   min-width: 200px;
   width: 200px;
   padding: var(--ds-space-3);
-  background: var(--ds-bg-inset);
+  background: linear-gradient(180deg, rgba(59, 130, 246, 0.08), rgba(255, 255, 255, 0.8));
   border: 1px solid var(--ds-border);
   border-radius: var(--ds-radius-md);
   box-sizing: border-box;
@@ -1326,7 +1330,7 @@ onUnmounted(() => {
   height: 36px !important;
   font-size: var(--ds-text-sm) !important;
   font-weight: 600 !important;
-  border-radius: var(--ds-radius-sm) !important;
+  border-radius: 10px !important;
   display: inline-flex !important;
   align-items: center !important;
   justify-content: center !important;
@@ -1337,8 +1341,8 @@ onUnmounted(() => {
   flex-shrink: 0;
 }
 .bc-btn-refresh.el-button {
-  background-color: var(--ds-bg-header) !important;
-  border-color: var(--ds-bg-header) !important;
+  background: linear-gradient(135deg, #334155, #1e293b) !important;
+  border-color: #1e293b !important;
   color: #ffffff !important;
 }
 .bc-btn-refresh.el-button:hover,

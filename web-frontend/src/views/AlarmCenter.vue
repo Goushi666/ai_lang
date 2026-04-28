@@ -309,9 +309,12 @@ onMounted(() => {
 <style scoped>
 .page-title {
   margin: 0 0 var(--ds-space-3) 0;
-  font-size: var(--ds-text-xl);
-  font-weight: 700;
+  padding-left: 10px;
+  border-left: 4px solid #3b82f6;
+  font-size: 20px;
+  font-weight: 800;
   color: var(--ds-text-primary);
+  letter-spacing: 0.02em;
 }
 
 .page-hint {
@@ -341,11 +344,23 @@ onMounted(() => {
   margin-bottom: var(--ds-space-4);
   border-radius: var(--ds-radius-md);
   border: 1px solid var(--ds-border-light);
+  box-shadow: 0 10px 24px rgba(15, 23, 42, 0.08);
+}
+.filter-card :deep(.el-card__body) {
+  padding: var(--ds-space-4);
 }
 
 .table-card {
   border-radius: var(--ds-radius-md);
   border: 1px solid var(--ds-border-light);
+  box-shadow: 0 12px 26px rgba(15, 23, 42, 0.1);
+}
+.table-card :deep(.el-card__body) {
+  padding: var(--ds-space-3) var(--ds-space-4) var(--ds-space-4);
+}
+.table-card :deep(.el-table) {
+  border-radius: 12px;
+  overflow: hidden;
 }
 
 .filter-actions {
@@ -353,13 +368,15 @@ onMounted(() => {
   flex-wrap: wrap;
   align-items: center;
   gap: var(--ds-space-2);
+  justify-content: flex-end;
 }
 
 .pager-wrap {
   display: flex;
   justify-content: flex-end;
   margin-top: var(--ds-space-4);
-  padding-top: var(--ds-space-2);
+  padding-top: var(--ds-space-3);
+  border-top: 1px solid rgba(148, 163, 184, 0.22);
 }
 
 .table-card :deep(.btn-danger-solid.el-button--danger),
@@ -385,5 +402,12 @@ onMounted(() => {
 .table-card :deep(.btn-danger-solid.el-button--danger.is-disabled),
 .filter-actions :deep(.btn-danger-solid.el-button--danger.is-disabled) {
   opacity: 0.5;
+}
+
+@media (max-width: 992px) {
+  .filter-actions {
+    justify-content: flex-start;
+    margin-top: var(--ds-space-2);
+  }
 }
 </style>

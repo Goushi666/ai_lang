@@ -1013,10 +1013,13 @@ onUnmounted(() => {
 
 .page-title {
   margin: 0 0 var(--ds-space-2) 0;
-  font-size: var(--ds-text-lg);
-  font-weight: 700;
+  padding-left: 10px;
+  border-left: 4px solid #3b82f6;
+  font-size: 20px;
+  font-weight: 800;
   color: var(--ds-text-primary);
   flex-shrink: 0;
+  letter-spacing: 0.02em;
 }
 
 .card-head {
@@ -1040,7 +1043,7 @@ onUnmounted(() => {
   overflow: hidden;
   display: flex;
   flex-direction: row;
-  gap: var(--ds-space-3);
+  gap: var(--ds-space-4);
   align-items: stretch;
 }
 
@@ -1086,7 +1089,7 @@ onUnmounted(() => {
 }
 
 .layout-col--video .video-card {
-  border-radius: var(--ds-radius-sm);
+  border-radius: 14px;
   border: 1px solid var(--ds-border);
   flex: 1;
   min-height: 0;
@@ -1186,8 +1189,9 @@ onUnmounted(() => {
 }
 
 .compact-panel {
-  border-radius: var(--ds-radius-sm);
+  border-radius: 14px;
   border: 1px solid var(--ds-border);
+  box-shadow: 0 10px 22px rgba(15, 23, 42, 0.07);
 }
 .compact-panel :deep(.el-card__header) {
   padding: 5px var(--ds-space-3);
@@ -1283,7 +1287,7 @@ onUnmounted(() => {
 }
 
 .control-card {
-  border-radius: var(--ds-radius-sm);
+  border-radius: 14px;
   flex: 1 1 0;
   min-height: 0;
   display: flex;
@@ -1398,8 +1402,9 @@ onUnmounted(() => {
   flex-direction: column;
   align-items: center;
   justify-content: center;
-  border-radius: var(--ds-radius-sm);
+  border-radius: 12px;
   padding: 2px 3px;
+  box-shadow: 0 8px 16px rgba(37, 99, 235, 0.25);
 }
 .dpad-btn :deep(.el-button__content) {
   flex-direction: column;
@@ -1427,6 +1432,7 @@ onUnmounted(() => {
   width: 42px;
   height: 42px;
   min-height: 42px;
+  box-shadow: 0 8px 16px rgba(245, 158, 11, 0.22);
 }
 
 .arm-control-body {

@@ -1,54 +1,55 @@
 <template>
   <div class="settings-page">
     <h2 class="page-title">系统设置</h2>
+    <div class="settings-grid">
+      <el-card shadow="hover" class="settings-card">
+        <template #header><span>告警阈值配置</span></template>
 
-    <el-card shadow="hover" class="settings-card">
-      <template #header><span>告警阈值配置</span></template>
+        <el-form
+          v-if="config"
+          :model="config"
+          label-width="120px"
+          label-position="left"
+          style="max-width: 480px"
+        >
+          <el-form-item label="温度阈值 (℃)">
+            <el-input-number v-model="config.temperature_threshold" :min="0" :max="100" :precision="1" />
+          </el-form-item>
+          <el-form-item label="湿度阈值 (%RH)">
+            <el-input-number v-model="config.humidity_threshold" :min="0" :max="100" :precision="1" />
+          </el-form-item>
+          <el-form-item label="光照阈值 (Lux)">
+            <el-input-number v-model="config.light_threshold" :min="0" :max="65535" :precision="0" />
+          </el-form-item>
+          <el-form-item>
+            <el-button type="primary" @click="save" :loading="saving">保存配置</el-button>
+          </el-form-item>
+        </el-form>
 
-      <el-form
-        v-if="config"
-        :model="config"
-        label-width="120px"
-        label-position="left"
-        style="max-width: 480px"
-      >
-        <el-form-item label="温度阈值 (℃)">
-          <el-input-number v-model="config.temperature_threshold" :min="0" :max="100" :precision="1" />
-        </el-form-item>
-        <el-form-item label="湿度阈值 (%RH)">
-          <el-input-number v-model="config.humidity_threshold" :min="0" :max="100" :precision="1" />
-        </el-form-item>
-        <el-form-item label="光照阈值 (Lux)">
-          <el-input-number v-model="config.light_threshold" :min="0" :max="65535" :precision="0" />
-        </el-form-item>
-        <el-form-item>
-          <el-button type="primary" @click="save" :loading="saving">保存配置</el-button>
-        </el-form-item>
-      </el-form>
+        <el-skeleton :rows="4" v-else animated />
+      </el-card>
 
-      <el-skeleton :rows="4" v-else animated />
-    </el-card>
-
-    <el-card shadow="hover" class="settings-card danger-zone">
-      <template #header><span>数据库维护</span></template>
-      <p class="danger-hint">
-        当前 SQLite（<code>app.db</code>）内两张业务表：传感器采样 <code>sensor_data</code>、环境异常落库
-        <code>environment_anomalies</code>。下方可一键清空，<strong>不可恢复</strong>。
-      </p>
-      <div class="purge-checks">
-        <el-checkbox v-model="purgeSensor">清空传感器采样（sensor_data）</el-checkbox>
-        <el-checkbox v-model="purgeAnomalies">清空环境异常记录（environment_anomalies）</el-checkbox>
-      </div>
-      <el-button
-        type="danger"
-        class="btn-purge-solid"
-        :disabled="!purgeSensor && !purgeAnomalies"
-        :loading="purging"
-        @click="confirmPurge"
-      >
-        一键清空所选表
-      </el-button>
-    </el-card>
+      <el-card shadow="hover" class="settings-card danger-zone">
+        <template #header><span>数据库维护</span></template>
+        <p class="danger-hint">
+          当前 SQLite（<code>app.db</code>）内两张业务表：传感器采样 <code>sensor_data</code>、环境异常落库
+          <code>environment_anomalies</code>。下方可一键清空，<strong>不可恢复</strong>。
+        </p>
+        <div class="purge-checks">
+          <el-checkbox v-model="purgeSensor">清空传感器采样（sensor_data）</el-checkbox>
+          <el-checkbox v-model="purgeAnomalies">清空环境异常记录（environment_anomalies）</el-checkbox>
+        </div>
+        <el-button
+          type="danger"
+          class="btn-purge-solid"
+          :disabled="!purgeSensor && !purgeAnomalies"
+          :loading="purging"
+          @click="confirmPurge"
+        >
+          一键清空所选表
+        </el-button>
+      </el-card>
+    </div>
   </div>
 </template>
 
@@ -126,15 +127,30 @@ onMounted(load);
 <style scoped>
 .page-title {
   margin: 0 0 var(--ds-space-5) 0;
-  font-size: var(--ds-text-xl);
-  font-weight: 700;
+  padding-left: 10px;
+  border-left: 4px solid #3b82f6;
+  font-size: 20px;
+  font-weight: 800;
   color: var(--ds-text-primary);
+  letter-spacing: 0.02em;
+}
+.settings-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(320px, 1fr));
+  gap: var(--ds-space-4);
+  align-items: start;
 }
 .settings-card {
   border-radius: var(--ds-radius-md);
-  max-width: 640px;
-  margin-bottom: var(--ds-space-4);
+  margin-bottom: 0;
   border: 1px solid var(--ds-border-light);
+  min-height: 100%;
+}
+.settings-card :deep(.el-card__header) {
+  font-weight: 700;
+}
+.settings-card :deep(.el-card__body) {
+  padding-top: var(--ds-space-4);
 }
 .danger-zone :deep(.el-card__header) {
   color: #b91c1c;
@@ -177,5 +193,11 @@ onMounted(load);
 }
 .btn-purge-solid.is-disabled {
   opacity: 0.55;
+}
+
+@media (max-width: 1100px) {
+  .settings-grid {
+    grid-template-columns: 1fr;
+  }
 }
 </style>
