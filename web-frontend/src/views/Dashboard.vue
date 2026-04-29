@@ -1042,12 +1042,13 @@ onUnmounted(() => {
 
 .metric-card {
   border-radius: 14px;
-  border: 1px solid var(--ds-border-light);
+  border: 1px solid rgba(96, 165, 250, 0.22);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.65);
   transition: transform var(--ds-transition), box-shadow var(--ds-transition);
 }
 .metric-card:hover {
   transform: translateY(-2px);
-  box-shadow: var(--ds-shadow-md);
+  box-shadow: 0 12px 24px rgba(37, 99, 235, 0.14);
 }
 .metric-card :deep(.el-card__body) {
   display: flex;
@@ -1102,7 +1103,8 @@ onUnmounted(() => {
   min-height: 0;
   display: flex;
   flex-direction: column;
-  border: 1px solid var(--ds-border-light);
+  border: 1px solid rgba(96, 165, 250, 0.24);
+  box-shadow: 0 10px 22px rgba(30, 64, 175, 0.1);
 }
 .g-ch {
   grid-area: ch;
@@ -1110,7 +1112,8 @@ onUnmounted(() => {
   min-height: 0;
   display: flex;
   flex-direction: column;
-  border: 1px solid var(--ds-border-light);
+  border: 1px solid rgba(96, 165, 250, 0.24);
+  box-shadow: 0 10px 22px rgba(30, 64, 175, 0.1);
 }
 
 .g-ct :deep(.el-card__header),
@@ -1200,7 +1203,8 @@ onUnmounted(() => {
   grid-area: bc;
   border-radius: 14px;
   flex-shrink: 0;
-  border: 1px solid var(--ds-border-light);
+  border: 1px solid rgba(96, 165, 250, 0.24);
+  box-shadow: 0 10px 22px rgba(30, 64, 175, 0.1);
 }
 
 .bc-row {

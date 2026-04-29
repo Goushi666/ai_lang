@@ -651,17 +651,19 @@ onMounted(async () => {
   gap: 0;
   border-radius: 16px;
   overflow: hidden;
-  background: rgba(255, 255, 255, 0.8);
-  backdrop-filter: blur(6px);
-  box-shadow: 0 16px 30px rgba(15, 23, 42, 0.08);
-  border: 1px solid var(--ds-border-light);
+  background: linear-gradient(160deg, rgba(255, 255, 255, 0.88), rgba(239, 246, 255, 0.72));
+  backdrop-filter: blur(8px);
+  box-shadow:
+    0 16px 30px rgba(15, 23, 42, 0.1),
+    inset 0 1px 0 rgba(255, 255, 255, 0.75);
+  border: 1px solid rgba(96, 165, 250, 0.24);
 }
 
 .conv-sidebar {
   width: 240px;
   flex-shrink: 0;
-  border-right: 1px solid var(--ds-border);
-  background: linear-gradient(180deg, rgba(239, 246, 255, 0.75), rgba(248, 250, 252, 0.92));
+  border-right: 1px solid rgba(96, 165, 250, 0.24);
+  background: linear-gradient(180deg, rgba(219, 234, 254, 0.55), rgba(239, 246, 255, 0.8));
   padding: var(--ds-space-3);
   display: flex;
   flex-direction: column;
@@ -697,11 +699,11 @@ onMounted(async () => {
   color: var(--ds-text-primary);
 }
 .conv-item.active {
-  background: linear-gradient(135deg, rgba(219, 234, 254, 0.85), rgba(191, 219, 254, 0.7));
-  border-color: rgba(59, 130, 246, 0.2);
+  background: linear-gradient(135deg, rgba(59, 130, 246, 0.22), rgba(37, 99, 235, 0.16));
+  border-color: rgba(59, 130, 246, 0.32);
   color: var(--ds-primary);
   font-weight: 500;
-  box-shadow: 0 4px 10px rgba(59, 130, 246, 0.15);
+  box-shadow: 0 8px 16px rgba(59, 130, 246, 0.2);
 }
 .conv-title {
   flex: 1;

@@ -1090,12 +1090,15 @@ onUnmounted(() => {
 
 .layout-col--video .video-card {
   border-radius: 14px;
-  border: 1px solid var(--ds-border);
+  border: 1px solid rgba(96, 165, 250, 0.24);
   flex: 1;
   min-height: 0;
   display: flex;
   flex-direction: column;
   height: 100%;
+  box-shadow:
+    0 12px 24px rgba(30, 64, 175, 0.12),
+    inset 0 1px 0 rgba(255, 255, 255, 0.66);
 }
 .layout-col--video .video-card :deep(.el-card__header) {
   padding: var(--ds-space-2) var(--ds-space-3);
@@ -1190,8 +1193,10 @@ onUnmounted(() => {
 
 .compact-panel {
   border-radius: 14px;
-  border: 1px solid var(--ds-border);
-  box-shadow: 0 10px 22px rgba(15, 23, 42, 0.07);
+  border: 1px solid rgba(96, 165, 250, 0.24);
+  box-shadow:
+    0 12px 24px rgba(30, 64, 175, 0.12),
+    inset 0 1px 0 rgba(255, 255, 255, 0.66);
 }
 .compact-panel :deep(.el-card__header) {
   padding: 5px var(--ds-space-3);

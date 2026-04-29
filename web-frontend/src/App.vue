@@ -154,10 +154,24 @@ html, body, #app {
   display: flex;
   flex-direction: column;
   background:
-    radial-gradient(circle at 10% 16%, rgba(56, 189, 248, 0.17), transparent 46%),
-    radial-gradient(circle at 88% 82%, rgba(45, 212, 191, 0.15), transparent 48%),
-    linear-gradient(135deg, rgba(56, 189, 248, 0.12) 0%, rgba(45, 212, 191, 0.1) 100%),
-    linear-gradient(180deg, #d9e5ee 0%, #ccdce8 100%);
+    radial-gradient(circle at 6% 12%, rgba(37, 99, 235, 0.24), transparent 44%),
+    radial-gradient(circle at 88% 18%, rgba(6, 182, 212, 0.2), transparent 40%),
+    radial-gradient(circle at 80% 86%, rgba(79, 70, 229, 0.22), transparent 46%),
+    linear-gradient(160deg, rgba(37, 99, 235, 0.14) 0%, rgba(59, 130, 246, 0.1) 42%, rgba(6, 182, 212, 0.12) 100%),
+    linear-gradient(180deg, #d3e1f1 0%, #bfd3e8 100%);
+  position: relative;
+}
+
+.app-layout::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  opacity: 0.24;
+  background-image: radial-gradient(rgba(15, 23, 42, 0.16) 0.5px, transparent 0.5px);
+  background-size: 3px 3px;
+  mix-blend-mode: soft-light;
+  z-index: 0;
 }
 
 .brand-logo {
@@ -174,8 +188,8 @@ html, body, #app {
   width: 26px;
   height: 26px;
   display: block;
-  fill: #60a5fa;
-  filter: drop-shadow(0 2px 4px rgba(59, 130, 246, 0.25));
+  fill: #3b82f6;
+  filter: drop-shadow(0 3px 8px rgba(37, 99, 235, 0.35));
 }
 
 .status-dot {
@@ -199,15 +213,19 @@ html, body, #app {
   overflow: hidden;
   padding: 10px;
   gap: 10px;
+  position: relative;
+  z-index: 1;
 }
 
 .app-aside {
   width: 76px;
-  background: linear-gradient(180deg, rgba(223, 233, 248, 0.96), rgba(208, 223, 243, 0.94));
-  border: 1px solid rgba(99, 122, 164, 0.28);
+  background: linear-gradient(180deg, rgba(207, 222, 245, 0.96), rgba(190, 210, 236, 0.94));
+  border: 1px solid rgba(59, 130, 246, 0.3);
   border-radius: 22px;
   backdrop-filter: blur(10px);
-  box-shadow: 0 10px 28px rgba(30, 58, 138, 0.12);
+  box-shadow:
+    0 12px 26px rgba(30, 58, 138, 0.14),
+    inset 0 1px 0 rgba(255, 255, 255, 0.5);
   transition:
     width 0.34s cubic-bezier(0.22, 1, 0.36, 1),
     background 0.28s ease,
@@ -219,8 +237,10 @@ html, body, #app {
 
 .app-aside:hover {
   width: 196px;
-  background: linear-gradient(180deg, rgba(217, 229, 247, 0.98), rgba(201, 218, 242, 0.96));
-  box-shadow: 0 16px 34px rgba(37, 99, 235, 0.16);
+  background: linear-gradient(180deg, rgba(198, 216, 243, 0.98), rgba(181, 203, 234, 0.96));
+  box-shadow:
+    0 18px 34px rgba(37, 99, 235, 0.2),
+    inset 0 1px 0 rgba(255, 255, 255, 0.65);
 }
 
 .aside-brand {
@@ -295,7 +315,7 @@ html, body, #app {
   align-items: center;
   justify-content: center;
   gap: 0;
-  transition: all 0.24s cubic-bezier(0.22, 1, 0.36, 1);
+  transition: all 0.26s cubic-bezier(0.22, 1, 0.36, 1);
   padding: 0 !important;
   border: none;
   background: transparent;
@@ -323,16 +343,18 @@ html, body, #app {
 }
 
 .side-menu .el-menu-item:hover {
-  background: rgba(255, 255, 255, 0.45);
+  background: linear-gradient(135deg, rgba(255, 255, 255, 0.52), rgba(219, 234, 254, 0.42));
   color: #1d4ed8;
-  transform: translateY(-1px);
+  transform: translateY(-1px) scale(1.015);
 }
 
 .side-menu .el-menu-item.is-active {
-  background: linear-gradient(135deg, rgba(59, 130, 246, 0.34), rgba(37, 99, 235, 0.24));
+  background: linear-gradient(135deg, rgba(37, 99, 235, 0.5), rgba(29, 78, 216, 0.34));
   color: #1e40af;
   font-weight: 700;
-  box-shadow: 0 10px 20px rgba(59, 130, 246, 0.2);
+  box-shadow:
+    0 12px 22px rgba(37, 99, 235, 0.28),
+    inset 0 1px 0 rgba(255, 255, 255, 0.35);
 }
 
 .menu-text {
@@ -363,6 +385,12 @@ html, body, #app {
   padding: 0 12px !important;
   gap: 10px;
 }
+
+.app-aside:hover .side-menu .el-menu-item:nth-child(1) { transition-delay: 0ms; }
+.app-aside:hover .side-menu .el-menu-item:nth-child(2) { transition-delay: 22ms; }
+.app-aside:hover .side-menu .el-menu-item:nth-child(3) { transition-delay: 44ms; }
+.app-aside:hover .side-menu .el-menu-item:nth-child(4) { transition-delay: 66ms; }
+.app-aside:hover .side-menu .el-menu-item:nth-child(5) { transition-delay: 88ms; }
 
 .app-aside:not(:hover) .side-menu .el-menu-item {
   width: 52px;
@@ -451,6 +479,7 @@ html, body, #app {
   min-height: 0;
   position: relative;
   border-radius: 18px;
+  z-index: 1;
 }
 
 .app-main::before {
@@ -538,21 +567,25 @@ html, body, #app {
 /* Modern global module + button style */
 .app-main .el-card {
   border-radius: 16px;
-  border: 1px solid rgba(148, 163, 184, 0.22);
-  background: linear-gradient(160deg, rgba(255, 255, 255, 0.9), rgba(247, 250, 255, 0.82));
-  backdrop-filter: blur(6px);
-  box-shadow: 0 10px 24px rgba(15, 23, 42, 0.08);
+  border: 1px solid rgba(96, 165, 250, 0.24);
+  background: linear-gradient(160deg, rgba(255, 255, 255, 0.9), rgba(239, 246, 255, 0.76));
+  backdrop-filter: blur(8px);
+  box-shadow:
+    0 12px 26px rgba(15, 23, 42, 0.1),
+    inset 0 1px 0 rgba(255, 255, 255, 0.72);
 }
 
 .app-main .el-card:hover {
-  box-shadow: 0 14px 30px rgba(15, 23, 42, 0.1);
+  box-shadow:
+    0 18px 34px rgba(30, 64, 175, 0.16),
+    inset 0 1px 0 rgba(255, 255, 255, 0.75);
 }
 
 .app-main .el-button {
   border-radius: 10px;
   font-weight: 600;
   letter-spacing: 0.01em;
-  transition: transform 0.16s ease, box-shadow 0.18s ease;
+  transition: transform 0.16s ease, box-shadow 0.22s ease, background-color 0.22s ease;
 }
 
 .app-main .el-button:hover {
@@ -565,18 +598,27 @@ html, body, #app {
 
 .app-main .el-button--primary {
   border: none;
-  background: linear-gradient(135deg, #3b82f6 0%, #2563eb 100%);
-  box-shadow: 0 6px 14px rgba(37, 99, 235, 0.3);
+  background: linear-gradient(135deg, #3b82f6 0%, #2563eb 56%, #1d4ed8 100%);
+  box-shadow: 0 8px 16px rgba(37, 99, 235, 0.3);
 }
 
 .app-main .el-button--primary:hover {
-  background: linear-gradient(135deg, #4f8ef7 0%, #2b6aed 100%);
-  box-shadow: 0 10px 18px rgba(37, 99, 235, 0.34);
+  background: linear-gradient(135deg, #5693f8 0%, #2f70ef 56%, #2154da 100%);
+  box-shadow: 0 12px 22px rgba(37, 99, 235, 0.38);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .app-aside,
+  .side-menu .el-menu-item,
+  .app-main .el-card,
+  .app-main .el-button {
+    transition: none !important;
+  }
 }
 
 .app-main .el-button--default {
-  border-color: rgba(148, 163, 184, 0.4);
-  background: rgba(255, 255, 255, 0.75);
+  border-color: rgba(96, 165, 250, 0.36);
+  background: rgba(239, 246, 255, 0.72);
 }
 
 .app-main .el-input__wrapper,

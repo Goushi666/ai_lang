@@ -143,8 +143,11 @@ onMounted(load);
 .settings-card {
   border-radius: var(--ds-radius-md);
   margin-bottom: 0;
-  border: 1px solid var(--ds-border-light);
+  border: 1px solid rgba(96, 165, 250, 0.24);
   min-height: 100%;
+  box-shadow:
+    0 12px 24px rgba(30, 64, 175, 0.12),
+    inset 0 1px 0 rgba(255, 255, 255, 0.66);
 }
 .settings-card :deep(.el-card__header) {
   font-weight: 700;

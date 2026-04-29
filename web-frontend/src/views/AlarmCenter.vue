@@ -343,8 +343,10 @@ onMounted(() => {
 .filter-card {
   margin-bottom: var(--ds-space-4);
   border-radius: var(--ds-radius-md);
-  border: 1px solid var(--ds-border-light);
-  box-shadow: 0 10px 24px rgba(15, 23, 42, 0.08);
+  border: 1px solid rgba(96, 165, 250, 0.24);
+  box-shadow:
+    0 12px 24px rgba(30, 64, 175, 0.12),
+    inset 0 1px 0 rgba(255, 255, 255, 0.66);
 }
 .filter-card :deep(.el-card__body) {
   padding: var(--ds-space-4);
@@ -352,8 +354,10 @@ onMounted(() => {
 
 .table-card {
   border-radius: var(--ds-radius-md);
-  border: 1px solid var(--ds-border-light);
-  box-shadow: 0 12px 26px rgba(15, 23, 42, 0.1);
+  border: 1px solid rgba(96, 165, 250, 0.24);
+  box-shadow:
+    0 14px 26px rgba(30, 64, 175, 0.14),
+    inset 0 1px 0 rgba(255, 255, 255, 0.66);
 }
 .table-card :deep(.el-card__body) {
   padding: var(--ds-space-3) var(--ds-space-4) var(--ds-space-4);
