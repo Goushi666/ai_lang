@@ -501,7 +501,18 @@ const chartLegendSmall = {
   bottom: 0,
   itemWidth: 12,
   itemHeight: 8,
-  textStyle: { fontSize: 10 },
+  textStyle: { fontSize: 10, color: "#6c6a64" },
+};
+
+const chartAxisLight = {
+  axisLine: { lineStyle: { color: "#e6dfd8" } },
+  splitLine: { lineStyle: { color: "#ebe6df" } },
+};
+
+const chartTooltipLight = {
+  backgroundColor: "rgba(255, 255, 255, 0.96)",
+  borderColor: "#e6dfd8",
+  textStyle: { color: "#141413", fontSize: 12 },
 };
 
 /** 图表缩放：时间/纵轴按钮与 dataZoom 共用 */
@@ -620,7 +631,7 @@ function initTempChart() {
   tempChart = echarts.init(tempChartRef.value);
   tempChart.setOption({
     animation: false,
-    tooltip: { trigger: "axis", formatter: tempAxisTooltipFormatter },
+    tooltip: { trigger: "axis", formatter: tempAxisTooltipFormatter, ...chartTooltipLight },
     toolbox: {
       right: 6,
       top: 2,
@@ -651,8 +662,15 @@ function initTempChart() {
         showDetail: false,
       },
     ],
-    xAxis: { type: "time", axisLabel: { fontSize: 10 } },
-    yAxis: { type: "value", name: "℃", scale: true, nameTextStyle: { fontSize: 10 }, axisLabel: { fontSize: 10 } },
+    xAxis: { type: "time", axisLabel: { fontSize: 10, color: "#6c6a64" }, ...chartAxisLight },
+    yAxis: {
+      type: "value",
+      name: "℃",
+      scale: true,
+      nameTextStyle: { fontSize: 10, color: "#6c6a64" },
+      axisLabel: { fontSize: 10, color: "#6c6a64" },
+      ...chartAxisLight,
+    },
     series: [
       {
         name: "实测",
@@ -663,7 +681,7 @@ function initTempChart() {
         symbolSize: 0,
         data: [],
         lineStyle: { width: 1.5 },
-        itemStyle: { color: "#409eff" },
+        itemStyle: { color: "#cc785c" },
         z: 3,
       },
       {
@@ -673,7 +691,7 @@ function initTempChart() {
         sampling: "lttb",
         showSymbol: false,
         data: [],
-        lineStyle: { type: "dashed", color: "#e6a23c", width: 1.5 },
+        lineStyle: { type: "dashed", color: "#e8a55a", width: 1.5 },
         z: 2,
       },
       {
@@ -683,7 +701,7 @@ function initTempChart() {
         sampling: "lttb",
         showSymbol: false,
         data: [],
-        lineStyle: { type: "dashed", color: "#67c23a", width: 1.5 },
+        lineStyle: { type: "dashed", color: "#5db8a6", width: 1.5 },
         z: 2,
       },
       {
@@ -702,7 +720,7 @@ function initTempChart() {
         stack: "futBand",
         data: [],
         lineStyle: { opacity: 0 },
-        areaStyle: { color: "rgba(103, 194, 58, 0.22)" },
+        areaStyle: { color: "rgba(93, 184, 166, 0.16)" },
         symbol: "none",
         silent: true,
         z: 0,
@@ -716,7 +734,7 @@ function initHumChart() {
   humChart = echarts.init(humChartRef.value);
   humChart.setOption({
     animation: false,
-    tooltip: { trigger: "axis" },
+    tooltip: { trigger: "axis", ...chartTooltipLight },
     toolbox: {
       right: 6,
       top: 2,
@@ -744,10 +762,24 @@ function initHumChart() {
         showDetail: false,
       },
     ],
-    xAxis: { type: "time", axisLabel: { fontSize: 10 } },
+    xAxis: { type: "time", axisLabel: { fontSize: 10, color: "#6c6a64" }, ...chartAxisLight },
     yAxis: [
-      { type: "value", name: "%RH", position: "left", nameTextStyle: { fontSize: 10 }, axisLabel: { fontSize: 10 } },
-      { type: "value", name: "lx", position: "right", nameTextStyle: { fontSize: 10 }, axisLabel: { fontSize: 10 } },
+      {
+        type: "value",
+        name: "%RH",
+        position: "left",
+        nameTextStyle: { fontSize: 10, color: "#6c6a64" },
+        axisLabel: { fontSize: 10, color: "#6c6a64" },
+        ...chartAxisLight,
+      },
+      {
+        type: "value",
+        name: "lx",
+        position: "right",
+        nameTextStyle: { fontSize: 10, color: "#6c6a64" },
+        axisLabel: { fontSize: 10, color: "#6c6a64" },
+        ...chartAxisLight,
+      },
     ],
     series: [
       {
@@ -757,7 +789,7 @@ function initHumChart() {
         sampling: "lttb",
         showSymbol: false,
         data: [],
-        itemStyle: { color: "#409eff" },
+        itemStyle: { color: "#cc785c" },
       },
       {
         name: "光照",
@@ -767,7 +799,7 @@ function initHumChart() {
         showSymbol: false,
         yAxisIndex: 1,
         data: [],
-        itemStyle: { color: "#e6a23c" },
+        itemStyle: { color: "#e8a55a" },
       },
     ],
   });
@@ -1013,13 +1045,12 @@ onUnmounted(() => {
 .dash-title {
   margin: 0 0 var(--ds-space-3) 0;
   padding-left: 10px;
-  border-left: 4px solid #3b82f6;
-  font-size: 20px;
-  font-weight: 800;
+  border-left: 4px solid var(--ds-primary);
+  font-size: 22px;
+  font-weight: 500;
   color: var(--ds-text-primary);
   line-height: 1.2;
   flex-shrink: 0;
-  letter-spacing: 0.02em;
 }
 
 .dash-grid {
@@ -1041,14 +1072,21 @@ onUnmounted(() => {
 .g-m3 { grid-area: m3; }
 
 .metric-card {
-  border-radius: 14px;
-  border: 1px solid rgba(96, 165, 250, 0.22);
-  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.65);
-  transition: transform var(--ds-transition), box-shadow var(--ds-transition);
+  border-radius: var(--ds-radius-lg);
+  border: 1px solid var(--ds-border);
+  background: var(--ds-bg-card);
+  box-shadow: none;
+  transition:
+    transform var(--ds-transition) var(--ds-ease-out-expo),
+    border-color var(--ds-transition),
+    box-shadow var(--ds-transition),
+    background var(--ds-transition);
 }
 .metric-card:hover {
-  transform: translateY(-2px);
-  box-shadow: 0 12px 24px rgba(37, 99, 235, 0.14);
+  transform: translateY(-3px);
+  background: var(--ds-bg-card-strong);
+  border-color: var(--ds-border-strong);
+  box-shadow: var(--ds-shadow-md);
 }
 .metric-card :deep(.el-card__body) {
   display: flex;
@@ -1056,9 +1094,9 @@ onUnmounted(() => {
   gap: var(--ds-space-3);
 }
 
-.metric-temp  { background: linear-gradient(135deg, #fef2f2 0%, #fff 100%); border-left: 3px solid var(--ds-danger); }
-.metric-hum   { background: linear-gradient(135deg, #eff6ff 0%, #fff 100%); border-left: 3px solid var(--ds-primary); }
-.metric-light { background: linear-gradient(135deg, #fffbeb 0%, #fff 100%); border-left: 3px solid var(--ds-warning); }
+.metric-temp  { background: linear-gradient(135deg, #faf0ee 0%, var(--ds-bg-card) 100%); border-left: 3px solid var(--ds-danger); }
+.metric-hum   { background: linear-gradient(135deg, #eef6f4 0%, var(--ds-bg-card) 100%); border-left: 3px solid var(--ds-accent-teal); }
+.metric-light { background: linear-gradient(135deg, #faf6ec 0%, var(--ds-bg-card) 100%); border-left: 3px solid var(--ds-accent-amber); }
 
 .metric-icon-wrap {
   width: 44px;
@@ -1069,9 +1107,9 @@ onUnmounted(() => {
   justify-content: center;
   flex-shrink: 0;
 }
-.temp-bg  { background: linear-gradient(135deg, #ef4444, #f87171); }
-.hum-bg   { background: linear-gradient(135deg, #3b82f6, #60a5fa); }
-.light-bg { background: linear-gradient(135deg, #f59e0b, #fbbf24); }
+.temp-bg  { background: linear-gradient(135deg, #c64545, #e07878); }
+.hum-bg   { background: linear-gradient(135deg, #4a9d8c, #5db8a6); }
+.light-bg { background: linear-gradient(135deg, #c9873a, #e8a55a); }
 
 .metric-info {
   flex: 1;
@@ -1099,21 +1137,23 @@ onUnmounted(() => {
 /* ── Chart Cards ── */
 .g-ct {
   grid-area: ct;
-  border-radius: 14px;
+  border-radius: var(--ds-radius-lg);
   min-height: 0;
   display: flex;
   flex-direction: column;
-  border: 1px solid rgba(96, 165, 250, 0.24);
-  box-shadow: 0 10px 22px rgba(30, 64, 175, 0.1);
+  border: 1px solid var(--ds-border);
+  background: var(--ds-bg-card);
+  box-shadow: none;
 }
 .g-ch {
   grid-area: ch;
-  border-radius: 14px;
+  border-radius: var(--ds-radius-lg);
   min-height: 0;
   display: flex;
   flex-direction: column;
-  border: 1px solid rgba(96, 165, 250, 0.24);
-  box-shadow: 0 10px 22px rgba(30, 64, 175, 0.1);
+  border: 1px solid var(--ds-border);
+  background: var(--ds-bg-card);
+  box-shadow: none;
 }
 
 .g-ct :deep(.el-card__header),
@@ -1156,7 +1196,8 @@ onUnmounted(() => {
   align-items: center;
   flex-shrink: 0;
   gap: 0;
-  background: var(--ds-bg-inset);
+  background: var(--ds-bg-soft);
+  border: 1px solid var(--ds-border-light);
   border-radius: var(--ds-radius-sm);
   padding: 2px;
 }
@@ -1201,10 +1242,11 @@ onUnmounted(() => {
 /* ── Broadcast Card ── */
 .g-bc {
   grid-area: bc;
-  border-radius: 14px;
+  border-radius: var(--ds-radius-lg);
   flex-shrink: 0;
-  border: 1px solid rgba(96, 165, 250, 0.24);
-  box-shadow: 0 10px 22px rgba(30, 64, 175, 0.1);
+  border: 1px solid var(--ds-border);
+  background: var(--ds-bg-card);
+  box-shadow: none;
 }
 
 .bc-row {
@@ -1276,8 +1318,8 @@ onUnmounted(() => {
   font-size: var(--ds-text-xs);
   line-height: 1.35;
   padding: 3px var(--ds-space-2);
-  background: var(--ds-warning-light);
-  color: #92400e;
+  background: rgba(212, 160, 23, 0.12);
+  color: #9a7309;
   border-radius: var(--ds-radius-sm);
   white-space: nowrap;
   overflow: hidden;
@@ -1303,8 +1345,8 @@ onUnmounted(() => {
   min-width: 200px;
   width: 200px;
   padding: var(--ds-space-3);
-  background: linear-gradient(180deg, rgba(59, 130, 246, 0.08), rgba(255, 255, 255, 0.8));
-  border: 1px solid var(--ds-border);
+  background: var(--ds-bg-elevated);
+  border: 1px solid var(--ds-border-strong);
   border-radius: var(--ds-radius-md);
   box-sizing: border-box;
 }
@@ -1345,25 +1387,25 @@ onUnmounted(() => {
   flex-shrink: 0;
 }
 .bc-btn-refresh.el-button {
-  background: linear-gradient(135deg, #334155, #1e293b) !important;
-  border-color: #1e293b !important;
-  color: #ffffff !important;
+  background: var(--ds-bg-page) !important;
+  border: 1px solid var(--ds-border) !important;
+  color: var(--ds-text-primary) !important;
 }
 .bc-btn-refresh.el-button:hover,
 .bc-btn-refresh.el-button:focus {
-  background-color: #334155 !important;
-  border-color: #334155 !important;
-  color: #ffffff !important;
+  background-color: var(--ds-bg-soft) !important;
+  border-color: var(--ds-border-strong) !important;
+  color: var(--ds-text-primary) !important;
 }
 .bc-btn-refresh.el-button:active {
-  background-color: #0f172a !important;
-  border-color: #0f172a !important;
+  background-color: var(--ds-bg-card) !important;
+  border-color: var(--ds-border) !important;
 }
 .bc-btn-export {
-  box-shadow: 0 2px 6px rgba(59, 130, 246, 0.3);
+  box-shadow: none;
 }
 .bc-btn-speak {
-  box-shadow: 0 2px 6px rgba(16, 185, 129, 0.3);
+  box-shadow: none;
 }
 .bc-btn-speak.is-disabled {
   opacity: 0.5;

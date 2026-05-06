@@ -1,0 +1,264 @@
+/**
+ * 助手 Markdown — 浅色对话身份（与用户珊瑚气泡区分）：软奶油底、浅灰正文、思考区透明。
+ * 代码块仍用略深的奶油阶，避免纯黑刺眼。
+ */
+
+:root {
+  --doc-canvas: var(--ds-bg-page);
+  --doc-canvas-deep: var(--ds-bg-card-strong);
+  --doc-surface-card: var(--ds-bg-soft);
+  --doc-surface-elevated: var(--ds-bg-card);
+  --doc-hairline: var(--ds-border);
+  --doc-hairline-soft: var(--ds-border-light);
+  --doc-hairline-strong: var(--ds-border-strong);
+  --doc-body: var(--ds-text-muted);
+  --doc-body-strong: var(--ds-text-secondary);
+  --doc-muted: var(--ds-text-muted-soft);
+  --doc-muted-soft: var(--ds-text-muted-soft);
+  --doc-primary: var(--ds-primary);
+  --doc-primary-active: var(--ds-primary-active);
+  --doc-primary-glow: var(--ds-primary);
+  --doc-on-primary: #ffffff;
+  --doc-semantic-success: var(--ds-success);
+  --doc-semantic-error: var(--ds-danger);
+  --doc-sans: var(--ds-font-sans);
+  --doc-mono: var(--ds-font-mono);
+  --doc-radius-md: var(--ds-radius-md);
+  --doc-radius-lg: var(--ds-radius-lg);
+  --doc-radius-xl: var(--ds-radius-xl);
+}
+
+.answer-block {
+  padding: 14px 16px;
+  background: var(--doc-surface-card);
+  color: var(--doc-body);
+  border: 1px solid var(--doc-hairline);
+  border-radius: var(--doc-radius-lg);
+  border-left: 3px solid rgba(93, 184, 166, 0.45);
+}
+
+.answer-block.is-streaming {
+  box-shadow: none;
+  border-left-color: rgba(93, 184, 166, 0.65);
+}
+
+.think-head {
+  color: var(--ds-text-muted);
+}
+
+.think-quote {
+  margin: 0;
+  padding: 4px 0 4px 12px;
+  background: transparent;
+  border-left: 2px solid var(--ds-border-strong);
+  color: var(--ds-text-muted-soft);
+  font-size: var(--ds-text-sm);
+  line-height: 1.55;
+  white-space: pre-wrap;
+  word-break: break-word;
+}
+
+.stream-phase-label {
+  color: var(--ds-text-muted);
+}
+
+.stream-caret {
+  color: var(--ds-primary);
+}
+
+.md-body .stream-md--reason p,
+.md-body .stream-md--reason li,
+.md-body .stream-md--reason code {
+  color: var(--ds-text-muted-soft);
+}
+
+/* 与用户气泡同字号（14px / body-sm） */
+.md-body:not(.user-bubble) {
+  font-family: var(--doc-sans);
+  font-size: var(--ds-text-base);
+  font-weight: 400;
+  line-height: 1.55;
+  color: var(--doc-body);
+  word-break: break-word;
+}
+
+.md-body:not(.user-bubble) h1,
+.md-body:not(.user-bubble) h2,
+.md-body:not(.user-bubble) h3,
+.md-body:not(.user-bubble) h4 {
+  font-family: var(--doc-sans);
+  color: var(--doc-body-strong);
+  font-weight: 600;
+  letter-spacing: -0.01em;
+  margin: 1em 0 0.4em;
+  line-height: 1.35;
+}
+
+.md-body:not(.user-bubble) h1:first-child,
+.md-body:not(.user-bubble) h2:first-child,
+.md-body:not(.user-bubble) h3:first-child,
+.md-body:not(.user-bubble) h4:first-child {
+  margin-top: 0;
+}
+
+.md-body:not(.user-bubble) h1 {
+  font-size: calc(var(--ds-text-base) + 2px);
+}
+
+.md-body:not(.user-bubble) h2 {
+  font-size: calc(var(--ds-text-base) + 1px);
+}
+
+.md-body:not(.user-bubble) h3,
+.md-body:not(.user-bubble) h4 {
+  font-size: var(--ds-text-base);
+}
+
+.md-body:not(.user-bubble) h4 {
+  color: var(--doc-muted);
+  font-weight: 500;
+}
+
+.md-body:not(.user-bubble) p {
+  margin: 0 0 0.55em;
+}
+
+.md-body:not(.user-bubble) p:last-child {
+  margin-bottom: 0;
+}
+
+.md-body:not(.user-bubble) a {
+  color: var(--doc-primary);
+  text-decoration: none;
+  border-bottom: 1px solid rgba(204, 120, 92, 0.35);
+  transition: color var(--ds-transition), border-color var(--ds-transition);
+}
+
+.md-body:not(.user-bubble) a:hover {
+  color: var(--doc-primary-active);
+  border-bottom-color: rgba(169, 88, 62, 0.5);
+}
+
+.md-body:not(.user-bubble) strong {
+  color: var(--ds-text-strong);
+  font-weight: 600;
+}
+
+.md-body:not(.user-bubble) hr {
+  border: none;
+  height: 1px;
+  margin: 1em 0;
+  background: var(--doc-hairline);
+}
+
+.md-body:not(.user-bubble) blockquote {
+  margin: 0.65em 0;
+  padding: 10px 14px;
+  border-left: 3px solid var(--ds-border-strong);
+  background: var(--ds-bg-page);
+  border-radius: 0 var(--doc-radius-md) var(--doc-radius-md) 0;
+  color: var(--doc-body);
+}
+
+.md-body:not(.user-bubble) ul,
+.md-body:not(.user-bubble) ol {
+  margin: 0.45em 0;
+  padding-left: 1.25em;
+  color: var(--doc-body);
+}
+
+.md-body:not(.user-bubble) li {
+  margin: 0.2em 0;
+}
+
+.md-body:not(.user-bubble) table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: var(--ds-text-base);
+  margin: 0.65em 0;
+  border: 1px solid var(--doc-hairline);
+  border-radius: var(--doc-radius-md);
+  overflow: hidden;
+}
+
+.md-body:not(.user-bubble) th,
+.md-body:not(.user-bubble) td {
+  padding: 8px 12px;
+  text-align: left;
+  border-bottom: 1px solid var(--doc-hairline);
+}
+
+.md-body:not(.user-bubble) th {
+  background: var(--doc-surface-elevated);
+  color: var(--doc-body-strong);
+  font-weight: 600;
+}
+
+.md-body:not(.user-bubble) tr:last-child td {
+  border-bottom: none;
+}
+
+.md-body:not(.user-bubble) code {
+  font-family: var(--doc-mono);
+  font-size: var(--ds-text-sm);
+  line-height: 1.55;
+  background: var(--ds-bg-page);
+  color: var(--ds-text-secondary);
+  padding: 1px 5px;
+  border-radius: 4px;
+  border: 1px solid var(--doc-hairline);
+}
+
+.md-body:not(.user-bubble) pre {
+  font-family: var(--doc-mono);
+  font-size: var(--ds-text-sm);
+  line-height: 1.55;
+  background: var(--doc-canvas-deep);
+  color: var(--ds-text-secondary);
+  padding: 14px 16px;
+  border-radius: var(--doc-radius-md);
+  overflow-x: auto;
+  margin: 0.55em 0;
+  border: 1px solid var(--doc-hairline);
+}
+
+.md-body:not(.user-bubble) pre code {
+  background: none;
+  border: none;
+  padding: 0;
+  color: inherit;
+  font-size: inherit;
+}
+
+.user-bubble.md-body p {
+  margin: 0 0 0.5em;
+}
+
+.user-bubble.md-body p:last-child {
+  margin-bottom: 0;
+}
+
+.user-bubble.md-body code {
+  background: rgba(255, 255, 255, 0.22);
+  color: #ffffff;
+  padding: 1px 6px;
+  border-radius: 4px;
+  font-family: var(--doc-mono);
+  font-size: 0.9em;
+  border: 1px solid rgba(255, 255, 255, 0.2);
+}
+
+.user-bubble.md-body pre {
+  background: rgba(0, 0, 0, 0.2);
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  border-radius: var(--doc-radius-md);
+  padding: 12px;
+  margin: 0.5em 0;
+  overflow-x: auto;
+}
+
+.user-bubble.md-body pre code {
+  background: none;
+  border: none;
+  padding: 0;
+}

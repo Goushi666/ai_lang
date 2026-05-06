@@ -1,6 +1,6 @@
 <template>
   <div class="agent-page app-main-route--agent">
-    <div class="agent-header">
+    <header class="agent-page-header">
       <div class="agent-header-row">
         <h2 class="page-title">智能助手</h2>
         <el-radio-group v-model="chatMode" size="small" class="mode-switch" :disabled="sending">
@@ -9,10 +9,10 @@
         </el-radio-group>
       </div>
       <p v-if="health?.message" class="page-sub">{{ health.message }}</p>
-    </div>
+    </header>
 
     <div class="agent-body">
-      <aside class="conv-sidebar">
+      <aside class="conv-sidebar conv-panel-bubble">
         <el-button type="primary" class="new-chat-btn" :disabled="sending" @click="newConversation">
           + 新对话
         </el-button>
@@ -32,8 +32,9 @@
       </aside>
 
       <div class="chat-main">
-        <div class="chat-panel">
-          <div ref="listRef" class="messages">
+        <div class="chat-stack">
+          <section class="chat-bubble--thread">
+            <div ref="listRef" class="messages">
             <div
               v-for="(m, i) in messages"
               :key="m._uid || `row-${i}`"
@@ -44,11 +45,11 @@
                   <el-icon><ChatDotRound /></el-icon>
                 </div>
                 <div class="msg-stack">
-                  <details v-if="m.reasoning && !m.streaming" class="think-block" open>
+                  <details v-if="m.reasoning && !m.streaming" class="think-block msg-part-bubble" open>
                     <summary class="think-head">已深度思考</summary>
                     <div class="think-quote">{{ m.reasoning }}</div>
                   </details>
-                  <div :class="['answer-block', { 'is-streaming': m.streaming }]">
+                  <div :class="['answer-block msg-part-bubble', { 'is-streaming': m.streaming }]">
                     <!-- 流式阶段同步渲染 Markdown（与结束后同一套 markdown-it + DOMPurify） -->
                     <div v-if="m.streaming" class="md-body streaming-stack streaming-md">
                       <template v-if="m.reasoning">
@@ -67,7 +68,7 @@
                     </div>
                     <div v-else class="md-body" v-html="renderMd(m.content)" />
                   </div>
-                  <div v-if="m.exports?.length" class="export-bar">
+                  <div v-if="m.exports?.length" class="export-bar msg-part-bubble">
                     <span class="export-bar-label">导出文件</span>
                     <a
                       v-for="(exp, ei) in m.exports"
@@ -90,36 +91,60 @@
                 </div>
               </template>
             </div>
-          </div>
+            </div>
+          </section>
 
-          <div class="composer">
-            <div v-if="clarificationOptions.length" class="clarify-bar">
-              <span class="clarify-label">快捷补充</span>
-              <el-button
-                v-for="(opt, idx) in clarificationOptions"
-                :key="idx"
-                type="primary"
-                plain
-                size="small"
-                class="clarify-chip"
-                @click="applyClarifyOption(opt)"
-              >
-                {{ opt.label }}
-              </el-button>
+          <section class="chat-input-strip">
+            <div class="composer">
+              <div v-if="clarificationOptions.length" class="clarify-bar">
+                <span class="clarify-label">快捷补充</span>
+                <el-button
+                  v-for="(opt, idx) in clarificationOptions"
+                  :key="idx"
+                  type="primary"
+                  plain
+                  size="small"
+                  class="clarify-chip"
+                  @click="applyClarifyOption(opt)"
+                >
+                  {{ opt.label }}
+                </el-button>
+              </div>
+              <div class="composer-surface">
+                <el-input
+                  ref="composerInputRef"
+                  v-model="input"
+                  type="textarea"
+                  class="composer-field"
+                  :autosize="{ minRows: 1, maxRows: 5 }"
+                  placeholder="输入问题，Shift+Enter 换行"
+                  @keydown.enter.exact.prevent="send"
+                />
+                <div class="composer-toolbar">
+                  <span class="composer-hint">Enter 发送 · Shift+Enter 换行</span>
+                  <div class="composer-actions">
+                    <el-button
+                      class="composer-tool-btn"
+                      circle
+                      :icon="Plus"
+                      aria-label="聚焦输入框"
+                      @click="focusComposerInput"
+                    />
+                    <el-button
+                      type="primary"
+                      class="composer-send-fab"
+                      circle
+                      :icon="Top"
+                      :loading="sending"
+                      :disabled="!health?.enabled"
+                      aria-label="发送"
+                      @click="send"
+                    />
+                  </div>
+                </div>
+              </div>
             </div>
-            <div class="input-row">
-              <el-input
-                v-model="input"
-                type="textarea"
-                :rows="3"
-                placeholder="输入问题，例如：当前温度与告警情况如何？"
-                @keydown.enter.exact.prevent="send"
-              />
-              <el-button type="primary" :loading="sending" :disabled="!health?.enabled" @click="send">
-                发送
-              </el-button>
-            </div>
-          </div>
+          </section>
         </div>
       </div>
     </div>
@@ -129,7 +154,7 @@
 <script setup>
 import { computed, nextTick, onMounted, ref, triggerRef, watch } from "vue";
 import { ElMessage } from "element-plus";
-import { ChatDotRound, Close, User } from "@element-plus/icons-vue";
+import { ChatDotRound, Close, Plus, Top, User } from "@element-plus/icons-vue";
 import { agentApi, agentChatStream } from "../api/agent";
 import { agentStreamDbg } from "../utils/agentStreamDebug";
 import { renderMarkdown } from "../utils/markdown";
@@ -211,7 +236,14 @@ const chatMode = ref("general");
 const input = ref("");
 const sending = ref(false);
 const listRef = ref(null);
+const composerInputRef = ref(null);
 const clarificationOptions = ref([]);
+
+function focusComposerInput() {
+  nextTick(() => {
+    composerInputRef.value?.focus?.();
+  });
+}
 
 const messages = computed(() => {
   const c = conversations.value.find((x) => x.id === activeId.value);
@@ -614,10 +646,26 @@ onMounted(async () => {
 </script>
 
 <style scoped>
-.agent-header {
+.agent-page {
+  flex: 1;
+  min-height: 0;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  box-sizing: border-box;
+}
+
+.agent-page-header {
   flex-shrink: 0;
   margin-bottom: var(--ds-space-3);
+  padding: var(--ds-space-3) var(--ds-space-4);
+  background: transparent;
+  border: none;
+  border-radius: 0;
+  box-shadow: none;
+  box-sizing: border-box;
 }
+
 .agent-header-row {
   display: flex;
   align-items: center;
@@ -628,11 +676,10 @@ onMounted(async () => {
 .page-title {
   margin: 0;
   padding-left: 10px;
-  border-left: 4px solid #3b82f6;
-  font-size: 20px;
-  font-weight: 800;
+  border-left: 4px solid var(--ds-primary);
+  font-size: 22px;
+  font-weight: 500;
   color: var(--ds-text-primary);
-  letter-spacing: 0.02em;
 }
 .mode-switch {
   flex-shrink: 0;
@@ -648,31 +695,33 @@ onMounted(async () => {
   flex: 1;
   min-height: 0;
   display: flex;
-  gap: 0;
-  border-radius: 16px;
+  gap: var(--ds-space-3);
   overflow: hidden;
-  background: linear-gradient(160deg, rgba(255, 255, 255, 0.88), rgba(239, 246, 255, 0.72));
-  backdrop-filter: blur(8px);
-  box-shadow:
-    0 16px 30px rgba(15, 23, 42, 0.1),
-    inset 0 1px 0 rgba(255, 255, 255, 0.75);
-  border: 1px solid rgba(96, 165, 250, 0.24);
+  background: transparent;
+  border: none;
+  box-shadow: none;
+  border-radius: 0;
 }
 
 .conv-sidebar {
   width: 240px;
   flex-shrink: 0;
-  border-right: 1px solid rgba(96, 165, 250, 0.24);
-  background: linear-gradient(180deg, rgba(219, 234, 254, 0.55), rgba(239, 246, 255, 0.8));
+  background: var(--ds-bg-card);
   padding: var(--ds-space-3);
   display: flex;
   flex-direction: column;
   gap: var(--ds-space-3);
 }
+
+.conv-panel-bubble {
+  border-radius: var(--ds-radius-lg);
+  border: 1px solid var(--ds-border);
+  box-shadow: 0 1px 4px rgba(20, 20, 19, 0.06);
+}
 .new-chat-btn {
   width: 100%;
-  border-radius: 10px !important;
-  font-weight: 600;
+  border-radius: var(--ds-radius-md) !important;
+  font-weight: 500;
 }
 .conv-list {
   flex: 1;
@@ -699,11 +748,11 @@ onMounted(async () => {
   color: var(--ds-text-primary);
 }
 .conv-item.active {
-  background: linear-gradient(135deg, rgba(59, 130, 246, 0.22), rgba(37, 99, 235, 0.16));
-  border-color: rgba(59, 130, 246, 0.32);
-  color: var(--ds-primary);
+  background: var(--ds-bg-card-strong);
+  border-color: var(--ds-border-strong);
+  color: var(--ds-text-primary);
   font-weight: 500;
-  box-shadow: 0 8px 16px rgba(59, 130, 246, 0.2);
+  box-shadow: inset 3px 0 0 var(--ds-primary);
 }
 .conv-title {
   flex: 1;
@@ -734,26 +783,146 @@ onMounted(async () => {
   padding: 0;
   overflow: hidden;
 }
-.chat-panel {
+
+/* 会话区 + 输入区同一外框，避免右侧与页眉错位 */
+.chat-stack {
   flex: 1;
+  min-width: 0;
   min-height: 0;
   display: flex;
   flex-direction: column;
-  background: var(--ds-bg-card);
+  overflow: hidden;
+  box-sizing: border-box;
+  background: var(--ds-bg-page);
+  border: 1px solid var(--ds-border);
+  border-radius: var(--ds-radius-lg);
+  box-shadow: 0 1px 4px rgba(20, 20, 19, 0.06);
 }
+
+.chat-bubble--thread {
+  flex: 1;
+  min-height: 0;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+
+.chat-input-strip {
+  flex-shrink: 0;
+  min-width: 0;
+  box-sizing: border-box;
+  padding: var(--ds-space-3) var(--ds-space-4) var(--ds-space-4);
+  background: transparent;
+  border-top: 1px solid var(--ds-border);
+}
+
 .messages {
   flex: 1;
   min-height: 0;
-  overflow-y: scroll;
+  min-width: 0;
+  overflow-y: auto;
   overflow-x: hidden;
-  scrollbar-gutter: stable;
-  padding: var(--ds-space-5) var(--ds-space-5) var(--ds-space-2);
+  scrollbar-gutter: stable both-edges;
+  padding: var(--ds-space-4);
+  box-sizing: border-box;
 }
+
+/* 长代码/表格不撑破右侧对齐 */
+.messages :deep(.md-body) {
+  overflow-wrap: break-word;
+  word-break: break-word;
+}
+.messages :deep(pre) {
+  max-width: 100%;
+  overflow-x: auto;
+}
+.messages :deep(table) {
+  display: block;
+  max-width: 100%;
+  overflow-x: auto;
+}
+
 .composer {
+  position: relative;
+  left: auto;
+  right: auto;
+  bottom: auto;
+  transform: none;
+  width: 100%;
+  max-width: none;
+  min-width: 0;
+  z-index: 1;
+  margin: 0;
+  padding: 0;
+  background: transparent;
+  border: none;
+  border-radius: 0;
+  box-shadow: none;
+}
+
+.composer-surface {
+  display: flex;
+  flex-direction: column;
+  gap: 0;
+}
+
+.composer-toolbar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--ds-space-3);
+  margin-top: 8px;
+  padding-top: 8px;
+  border-top: 1px solid rgba(230, 223, 216, 0.75);
+}
+
+.composer-hint {
+  font-size: 11px;
+  color: var(--ds-text-muted);
+  line-height: 1.35;
+  user-select: none;
+}
+
+.composer-actions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
   flex-shrink: 0;
-  border-top: 1px solid var(--ds-border);
-  padding: var(--ds-space-3) var(--ds-space-4) var(--ds-space-4);
-  background: linear-gradient(180deg, rgba(248, 250, 252, 0.9), rgba(241, 245, 249, 0.9));
+}
+
+.composer-tool-btn {
+  width: 32px !important;
+  height: 32px !important;
+  padding: 0 !important;
+  border: 1px solid var(--ds-border) !important;
+  background: var(--ds-bg-page) !important;
+  color: var(--ds-text-muted) !important;
+  transition: background var(--ds-transition), border-color var(--ds-transition), color var(--ds-transition);
+}
+
+.composer-tool-btn:hover {
+  background: var(--ds-bg-soft) !important;
+  color: var(--ds-text-secondary) !important;
+  border-color: var(--ds-border-strong) !important;
+}
+
+.composer-send-fab {
+  width: 32px !important;
+  height: 32px !important;
+  padding: 0 !important;
+  border: none !important;
+  box-shadow: 0 1px 4px rgba(204, 120, 92, 0.28);
+  transition: transform var(--ds-transition), box-shadow var(--ds-transition), background-color var(--ds-transition);
+}
+
+.composer-send-fab:not(:disabled):hover {
+  transform: scale(1.04);
+  box-shadow: 0 2px 8px rgba(204, 120, 92, 0.35);
+}
+
+.composer-send-fab:not(:disabled):active {
+  transform: scale(0.96);
 }
 
 .msg-row {
@@ -776,14 +945,14 @@ onMounted(async () => {
   font-size: 16px;
 }
 .assistant-av {
-  background: linear-gradient(135deg, #d1fae5, #a7f3d0);
-  color: #059669;
-  border: none;
+  background: rgba(93, 184, 166, 0.12);
+  color: #3d8f7f;
+  border: 1px solid rgba(93, 184, 166, 0.35);
 }
 .user-av {
-  background: linear-gradient(135deg, #dbeafe, #bfdbfe);
-  color: var(--ds-primary);
-  border: none;
+  background: rgba(204, 120, 92, 0.14);
+  color: var(--ds-primary-active);
+  border: 1px solid rgba(204, 120, 92, 0.35);
 }
 .msg-stack {
   max-width: min(720px, calc(100% - 48px));
@@ -794,7 +963,7 @@ onMounted(async () => {
   justify-content: flex-end;
 }
 .user-bubble {
-  background: linear-gradient(135deg, #3b82f6, #2563eb);
+  background: linear-gradient(135deg, var(--ds-primary) 0%, var(--ds-primary-active) 100%);
   color: #ffffff;
   padding: var(--ds-space-3) var(--ds-space-4);
   border-radius: var(--ds-radius-lg) var(--ds-radius-lg) var(--ds-space-1) var(--ds-radius-lg);
@@ -802,13 +971,29 @@ onMounted(async () => {
   line-height: 1.55;
   max-width: 100%;
 }
-.think-block {
-  margin-bottom: var(--ds-space-3);
+.think-block.msg-part-bubble {
+  margin-bottom: 0;
+  padding: 0;
+  background: transparent;
+  border: none;
+  border-radius: 0;
+}
+
+.think-block.msg-part-bubble .think-quote {
+  border-left: none;
+  padding-left: 0;
+}
+
+.msg-stack .think-block + .answer-block {
+  margin-top: var(--ds-space-3);
+}
+
+.msg-stack .answer-block + .export-bar {
+  margin-top: var(--ds-space-3);
 }
 .think-head {
   cursor: pointer;
   font-size: var(--ds-text-sm);
-  color: var(--ds-text-muted);
   list-style: none;
   user-select: none;
   margin-bottom: var(--ds-space-2);
@@ -823,30 +1008,16 @@ onMounted(async () => {
 .think-block:not([open]) .think-head::after {
   content: " \25B8";
 }
-.think-quote {
-  margin: 0;
-  padding: var(--ds-space-1) 0 var(--ds-space-1) var(--ds-space-3);
-  border-left: 3px solid var(--ds-border);
-  font-size: var(--ds-text-sm);
-  line-height: 1.6;
-  color: var(--ds-text-secondary);
-  white-space: pre-wrap;
-  word-break: break-word;
-}
-.answer-block {
-  padding: var(--ds-space-1) 0 var(--ds-space-2);
-  color: var(--ds-text-primary);
-}
-.export-bar {
+.export-bar.msg-part-bubble {
   display: flex;
   flex-wrap: wrap;
   align-items: center;
   gap: var(--ds-space-2) var(--ds-space-3);
-  margin-top: var(--ds-space-3);
+  margin-top: 0;
   padding: var(--ds-space-3);
   background: var(--ds-primary-bg);
   border: 1px solid var(--ds-primary-lighter);
-  border-radius: var(--ds-radius-sm);
+  border-radius: var(--ds-radius-md);
   font-size: var(--ds-text-sm);
 }
 .export-bar-label {
@@ -863,7 +1034,7 @@ onMounted(async () => {
 }
 .streaming-stack {
   font-size: var(--ds-text-base);
-  line-height: 1.65;
+  line-height: 1.55;
   word-break: break-word;
 }
 .streaming-md .stream-phase-row {
@@ -876,24 +1047,16 @@ onMounted(async () => {
 .stream-md--answer :deep(p:last-child) {
   margin-bottom: 0;
 }
-.stream-md--reason :deep(p) {
-  color: var(--ds-text-secondary);
-}
-.stream-md--reason :deep(code) {
-  color: var(--ds-text-secondary);
-}
 .stream-phase-label {
   display: inline;
   margin-right: var(--ds-space-2);
   font-size: var(--ds-text-sm);
   font-weight: 600;
-  color: var(--ds-text-muted);
   user-select: none;
 }
 .stream-caret {
   display: inline;
   margin-left: 1px;
-  color: var(--ds-primary);
   font-weight: 300;
   vertical-align: baseline;
   animation: streamCaretBlink 1s step-end infinite;
@@ -908,59 +1071,17 @@ onMounted(async () => {
     opacity: 0;
   }
 }
-.md-body {
-  font-size: var(--ds-text-base);
-  line-height: 1.65;
-  word-break: break-word;
-}
 .streaming-plain {
   white-space: pre-wrap;
   word-break: break-word;
 }
-.md-body :deep(p) {
-  margin: 0 0 0.6em;
-}
-.md-body :deep(p:last-child) {
-  margin-bottom: 0;
-}
-.md-body :deep(code) {
-  background: var(--ds-bg-inset);
-  padding: 1px 5px;
-  border-radius: var(--ds-radius-sm);
-  font-size: 0.9em;
-  font-family: var(--ds-font-mono);
-}
-.md-body :deep(pre) {
-  background: var(--ds-bg-inset);
-  padding: var(--ds-space-3);
-  border-radius: var(--ds-radius-sm);
-  overflow-x: auto;
-  margin: 0.5em 0;
-  border: 1px solid var(--ds-border-light);
-}
-.md-body :deep(pre code) {
-  background: none;
-  padding: 0;
-}
-.md-body :deep(ul),
-.md-body :deep(ol) {
-  margin: 0.4em 0;
-  padding-left: 1.4em;
-}
-.user-bubble.md-body :deep(p) {
-  margin: 0;
-}
-.user-bubble.md-body :deep(code) {
-  background: rgba(255, 255, 255, 0.2);
-  color: #ffffff;
-}
 
 .clarify-bar {
-  margin-bottom: var(--ds-space-3);
-  padding: var(--ds-space-3);
-  border-radius: var(--ds-radius-sm);
-  background: var(--ds-primary-bg);
-  border: 1px solid var(--ds-primary-lighter);
+  margin-bottom: 10px;
+  padding: 8px 10px;
+  border-radius: 10px;
+  background: var(--ds-bg-soft);
+  border: 1px solid rgba(230, 223, 216, 0.7);
   display: flex;
   flex-wrap: wrap;
   align-items: center;
@@ -974,24 +1095,66 @@ onMounted(async () => {
 }
 .clarify-chip {
   font-weight: 500;
-  color: var(--ds-primary-dark) !important;
-  border-color: rgba(59, 130, 246, 0.3) !important;
-  background: var(--ds-bg-card) !important;
+  color: var(--ds-primary) !important;
+  border-color: var(--ds-border) !important;
+  background: var(--ds-bg-page) !important;
   border-radius: 999px !important;
-  box-shadow: 0 2px 8px rgba(59, 130, 246, 0.1);
+  box-shadow: none;
+  transition: background var(--ds-transition), border-color var(--ds-transition), color var(--ds-transition);
 }
 .clarify-chip:hover {
-  color: var(--ds-primary) !important;
+  color: var(--ds-primary-active) !important;
   border-color: var(--ds-primary) !important;
   background: var(--ds-primary-bg) !important;
 }
-.input-row {
-  display: flex;
-  gap: var(--ds-space-3);
-  align-items: flex-end;
-  flex-shrink: 0;
+.composer-field {
+  width: 100%;
 }
-.input-row .el-input {
-  flex: 1;
+
+/* 大圆角白卡片内：无边框输入区（类似元宝主输入） */
+.composer-field :deep(.el-textarea__inner) {
+  min-height: 36px !important;
+  font-size: var(--ds-text-base) !important;
+  line-height: 1.5 !important;
+  padding: 4px 2px 2px !important;
+  background-color: transparent !important;
+  color: var(--ds-text-primary) !important;
+  border: none !important;
+  border-radius: 0 !important;
+  box-shadow: none !important;
+  resize: none !important;
+}
+
+.composer-field :deep(.el-textarea__inner::placeholder) {
+  color: var(--ds-text-muted-soft);
+}
+
+.composer-field :deep(.el-textarea__inner:focus) {
+  outline: none !important;
+  box-shadow: none !important;
+}
+
+.composer-field :deep(.el-input__wrapper) {
+  background: transparent !important;
+  box-shadow: none !important;
+  padding: 0 !important;
+}
+
+@media (max-width: 720px) {
+  .agent-body {
+    flex-direction: column;
+    overflow: auto;
+  }
+  .conv-sidebar {
+    width: 100%;
+    max-height: 200px;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .composer-send-fab:not(:disabled):hover,
+  .composer-send-fab:not(:disabled):active {
+    transform: none;
+  }
 }
 </style>

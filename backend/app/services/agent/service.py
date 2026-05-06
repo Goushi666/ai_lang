@@ -313,6 +313,7 @@ class AgentService:
         session_id: Optional[str] = None,
         mode: str = "general",
         stream: bool = False,
+        user_level: str = "guest",
     ) -> ChatResponse:
         """
         处理一次用户对话请求。
@@ -369,6 +370,7 @@ class AgentService:
         system_prompt = get_system_prompt(
             mode=session.mode,
             tool_names=self._tools.list_names() or None,
+            user_level=user_level,
         )
         system_prompt = await self._append_rag_retrieval(
             mode=session.mode,
@@ -459,6 +461,7 @@ class AgentService:
         messages: List[ChatMessage],
         session_id: Optional[str] = None,
         mode: str = "general",
+        user_level: str = "guest",
     ) -> AsyncIterator[Dict[str, Any]]:
         """
         供 SSE 使用：澄清 / 工具循环与 chat() 一致；最终回复按配置输出 delta（思考与正文分离）。
@@ -498,6 +501,7 @@ class AgentService:
         system_prompt = get_system_prompt(
             mode=session.mode,
             tool_names=self._tools.list_names() or None,
+            user_level=user_level,
         )
         system_prompt = await self._append_rag_retrieval(
             mode=session.mode,

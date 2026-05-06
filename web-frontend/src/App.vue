@@ -1,12 +1,94 @@
 <template>
-  <el-container class="app-layout">
+  <router-view v-if="isAuthPage" />
+  <el-container v-else class="app-layout">
     <el-container class="app-body">
       <el-aside class="app-aside">
         <div class="aside-brand">
           <span class="brand-logo" aria-hidden="true">
-            <svg viewBox="0 0 1024 1024" xmlns="http://www.w3.org/2000/svg">
+            <svg class="brand-logo-svg" viewBox="0 0 1054 1024" xmlns="http://www.w3.org/2000/svg">
               <path
-                d="M464 879.2c-38-4.8-105.6-26.8-136.4-45.2-60.4-35.2-117.2-95.2-145.2-152-28.8-59.2-45.2-138.8-40.4-195.6 3.2-37.2 23.6-110.8 38.4-138l11.2-21.2-10-20c-14.8-29.2-32.8-90.8-37.6-128-2-18-3.2-33.2-2.4-34 0.4-0.8 5.6 2 10.8 6.4 22 16.8 71.6 38.8 119.2 52.4l26 7.2 12-9.2c46-34.4 129.2-58.4 202.4-58.4s156.4 24 202.4 58.4l12 9.2 26-7.2c46-13.2 96-35.2 122.8-54.4l9.2-6.8-2.4 23.6c-5.2 49.2-19.2 99.6-38.8 138.8-10.4 20.8-11.2 24.4-6 30 14.8 17.2 40 100.4 44.8 149.2 5.6 54-11.6 138.4-40.4 197.6-28 56.8-84.8 116.8-145.2 152-32.8 19.2-99.2 40.4-142.4 45.6-40.4 4.8-47.6 4.8-90-0.4z m-29.2-327.2c18.4-8 53.2-40.4 53.2-49.2 0-6.4-182.8-100-190.4-97.2-8 3.2-14.8 34-12.4 56.8 4 37.6 30 72.8 66.8 89.2 23.6 10.8 60 10.8 82.8 0.4z m238.8-4.4c31.6-14.8 58-49.2 64.4-84 2.8-14.4-3.6-50-10.4-58-2.8-3.6-11.6-0.4-34.8 12-16.8 8.8-59.2 30.8-94 48-34.4 17.6-62.8 33.2-62.8 35.2 0 6.8 22 31.6 35.2 40 32.4 20.4 68.8 22.8 102.4 6.8z"
+                d="M691.828488 808.294579H554.458227v117.461528h137.370261V808.294579z"
+                fill="#333333"
+              />
+              <path
+                d="M261.799845 925.756107l39.817467-586.312201h17.91786l-37.826593 586.312201h-19.908734z"
+                fill="#333333"
+              />
+              <path
+                d="M57.735327 364.329823H47.78096v443.964756h9.954367V364.329823zM965.573574 925.756107H261.799845v39.817467h703.773729v-39.817467zM301.617312 925.756107h37.826594V261.799845h-37.826594v663.956262z"
+                fill="#999999"
+              />
+              <path
+                d="M888.92495 731.645955l76.648624-19.908733-39.817467-175.196855-76.648624 17.91786 39.817467 177.187728z"
+                fill="#666666"
+              />
+              <path
+                d="M925.756107 654.001895H691.828488l-37.826593 271.754212h271.754212V654.001895z"
+                fill="#999999"
+              />
+              <path
+                d="M554.458227 925.756107H339.443906V654.001895h215.014321v271.754212z"
+                fill="#666666"
+              />
+              <path
+                d="M516.631634 654.001895l37.826593-137.370261-215.014321-77.644061v215.014322h177.187728z"
+                fill="#4C4C4C"
+              />
+              <path
+                d="M711.737222 351.389146l-14.93155-11.94524-289.672072 369.307006 14.93155 12.940676 289.672072-370.302442zM663.956261 294.649255l-14.93155-12.940676-289.672072 369.307006 14.93155 12.940676 289.672072-369.307006z"
+                fill="#999999"
+              />
+              <path
+                d="M320.530609 300.621875m-38.82203 0a38.82203 38.82203 0 1 0 77.64406 0 38.82203 38.82203 0 1 0-77.64406 0Z"
+                fill="#4C4C4C"
+              />
+              <path
+                d="M849.107483 731.645955l22.895043-11.94524 12.940677-23.89048 0.995437-13.936113-5.97262-25.881354-20.904171-19.908733-9.954366-1.990874-449.937377 19.908734v57.735327l449.937377 19.908733z"
+                fill="#7F7F7F"
+              />
+              <path
+                d="M634.093161 925.756107L417.087966 691.828488l-17.91786 19.908734 195.105588 214.018885h39.817467z"
+                fill="#7F7F7F"
+              />
+              <path
+                d="M398.17467 672.915191m-58.730764 0a58.730764 58.730764 0 1 0 117.461527 0 58.730764 58.730764 0 1 0-117.461527 0Z"
+                fill="#4C4C4C"
+              />
+              <path
+                d="M67.689694 808.294579H37.826594v19.908734h29.8631v-19.908734zM62.71251 828.203313H42.803777v117.461527h19.908733V828.203313z"
+                fill="#B2B2B2"
+              />
+              <path
+                d="M77.644061 878.970583H27.872227v19.908733h49.771834v-19.908733zM77.644061 903.8565H27.872227v6.968057h49.771834v-6.968057zM62.71251 965.573574l14.931551-19.908734H27.872227l14.93155 19.908734h19.908733z"
+                fill="#B2B2B2"
+              />
+              <path
+                d="M399.170106 672.915191m-34.840283 0a34.840284 34.840284 0 1 0 69.680567 0 34.840284 34.840284 0 1 0-69.680567 0Z"
+                fill="#999999"
+              />
+              <path
+                d="M672.915191 320.530609m-58.730763 0a58.730764 58.730764 0 1 0 117.461527 0 58.730764 58.730764 0 1 0-117.461527 0Z"
+                fill="#4C4C4C"
+              />
+              <path
+                d="M672.915191 320.530609m-33.844846 0a33.844847 33.844847 0 1 0 67.689693 0 33.844847 33.844847 0 1 0-67.689693 0Z"
+                fill="#999999"
+              />
+              <path
+                d="M165.242488 165.242488l505.68183 76.648624 60.721637 117.461527-607.216371-117.461527 40.812904-76.648624z"
+                fill="#999999"
+              />
+              <path
+                d="M47.78096 364.329823V221.982378l76.648624-194.110151 77.644061 79.634934L57.735327 364.329823H47.78096z"
+                fill="#666666"
+              />
+              <path
+                d="M57.735327 808.294579H44.79465v19.908734h12.940677v-19.908734zM54.749017 828.203313h-6.968057v117.461527h6.968057V828.203313z"
+                fill="#E5E5E5"
+              />
+              <path
+                d="M62.71251 878.970583H42.803777v19.908733h19.908733v-19.908733zM62.71251 903.8565H42.803777v6.968057h19.908733v-6.968057zM54.749017 965.573574l7.963493-19.908734H42.803777l4.977183 19.908734h6.968057z"
+                fill="#E5E5E5"
               />
             </svg>
           </span>
@@ -61,11 +143,13 @@
 </template>
 
 <script setup>
-import { computed, onMounted, onUnmounted, ref, provide } from "vue";
-import { useRoute } from "vue-router";
+import { computed, onMounted, onUnmounted, ref, provide, watch } from "vue";
+import { useRoute, useRouter } from "vue-router";
 import { ElNotification } from "element-plus";
 import { Monitor, VideoCamera, Bell, Setting, ChatDotRound } from "@element-plus/icons-vue";
 import WebSocketClient from "./utils/websocket.js";
+import { authMe } from "./api/auth.js";
+import { clearSession, getToken, setSession } from "./utils/authStore.js";
 
 function alarmLevelLabel(level) {
   const map = { low: "低", medium: "中", high: "高", urgent: "紧急" };
@@ -103,7 +187,28 @@ function showAlarmNotification(payload) {
 }
 
 const route = useRoute();
+const router = useRouter();
 const currentRoute = computed(() => route.path);
+const isAuthPage = computed(() => Boolean(route.meta?.public));
+async function refreshAuthUser() {
+  if (isAuthPage.value || !getToken()) {
+    return;
+  }
+  try {
+    const u = await authMe();
+    setSession(getToken(), u);
+  } catch {
+    clearSession();
+    router.push({ path: "/login", query: { redirect: route.fullPath } });
+  }
+}
+
+watch(
+  () => route.fullPath,
+  () => {
+    refreshAuthUser();
+  },
+);
 
 /* ---------- 全局 WebSocket ---------- */
 const wsConnected = ref(false);
@@ -129,6 +234,7 @@ provide("ws", ws);
 provide("wsConnected", wsConnected);
 
 onMounted(() => {
+  refreshAuthUser();
   ws.on("alarm", showAlarmNotification);
   ws.connect();
 });
@@ -153,25 +259,46 @@ html, body, #app {
   height: 100vh;
   display: flex;
   flex-direction: column;
-  background:
-    radial-gradient(circle at 6% 12%, rgba(37, 99, 235, 0.24), transparent 44%),
-    radial-gradient(circle at 88% 18%, rgba(6, 182, 212, 0.2), transparent 40%),
-    radial-gradient(circle at 80% 86%, rgba(79, 70, 229, 0.22), transparent 46%),
-    linear-gradient(160deg, rgba(37, 99, 235, 0.14) 0%, rgba(59, 130, 246, 0.1) 42%, rgba(6, 182, 212, 0.12) 100%),
-    linear-gradient(180deg, #d3e1f1 0%, #bfd3e8 100%);
+  background-color: var(--ds-bg-page);
+  /* 明度几乎不变的对角过渡，不靠加色相/压暗提质感 */
+  background-image: linear-gradient(
+    165deg,
+    var(--ds-bg-page) 0%,
+    var(--ds-bg-soft) 50%,
+    var(--ds-bg-page) 100%
+  );
   position: relative;
 }
 
+/* 纸质颗粒：多层中性点阵，错位叠加，肉眼有「纸面」而不改整体颜色 */
 .app-layout::before {
   content: "";
   position: absolute;
   inset: 0;
   pointer-events: none;
-  opacity: 0.24;
-  background-image: radial-gradient(rgba(15, 23, 42, 0.16) 0.5px, transparent 0.5px);
-  background-size: 3px 3px;
-  mix-blend-mode: soft-light;
   z-index: 0;
+  background-image:
+    radial-gradient(rgba(20, 20, 19, 0.028) 0.32px, transparent 0.32px),
+    radial-gradient(rgba(20, 20, 19, 0.04) 0.5px, transparent 0.5px),
+    radial-gradient(rgba(20, 20, 19, 0.018) 0.55px, transparent 0.55px);
+  background-size: 2.5px 2.5px, 5px 5px, 11px 11px;
+  background-position: 0 0, 1.2px 2.4px, 3px 0.8px;
+}
+
+/* 极淡定向纤维纹，增强触感；对比度极低，不当作着色层 */
+.app-layout::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  z-index: 0;
+  background-image: repeating-linear-gradient(
+    92deg,
+    transparent 0,
+    transparent 7px,
+    rgba(20, 20, 19, 0.006) 7px,
+    rgba(20, 20, 19, 0.006) 8px
+  );
 }
 
 .brand-logo {
@@ -184,12 +311,15 @@ html, body, #app {
   background: transparent;
 }
 
-.brand-logo svg {
-  width: 26px;
-  height: 26px;
+.brand-logo .brand-logo-svg {
+  width: 40px;
+  height: 40px;
   display: block;
-  fill: #3b82f6;
-  filter: drop-shadow(0 3px 8px rgba(37, 99, 235, 0.35));
+  transition: transform var(--ds-transition);
+}
+
+.app-aside:hover .brand-logo .brand-logo-svg {
+  transform: scale(1.05);
 }
 
 .status-dot {
@@ -199,12 +329,12 @@ html, body, #app {
   display: inline-block;
 }
 .status-dot.online  {
-  background: var(--ds-success);
-  box-shadow: 0 0 0 3px rgba(16, 185, 129, 0.14);
+  background: var(--ds-accent-teal);
+  box-shadow: 0 0 0 2px rgba(93, 184, 166, 0.25);
 }
 .status-dot.offline {
   background: var(--ds-danger);
-  box-shadow: 0 0 0 3px rgba(239, 68, 68, 0.12);
+  box-shadow: 0 0 0 2px rgba(198, 69, 69, 0.2);
 }
 
 .app-body {
@@ -218,18 +348,20 @@ html, body, #app {
 }
 
 .app-aside {
+  /* 展开/收起：略长时长 + 顺滑减速，质感主要靠时长与错开而非「弹」 */
+  --aside-dur: 0.52s;
+  --aside-ease: cubic-bezier(0.22, 1, 0.36, 1);
+  --aside-stagger: 20ms;
   width: 76px;
-  background: linear-gradient(180deg, rgba(207, 222, 245, 0.96), rgba(190, 210, 236, 0.94));
-  border: 1px solid rgba(59, 130, 246, 0.3);
-  border-radius: 22px;
-  backdrop-filter: blur(10px);
-  box-shadow:
-    0 12px 26px rgba(30, 58, 138, 0.14),
-    inset 0 1px 0 rgba(255, 255, 255, 0.5);
+  background: var(--ds-bg-soft);
+  border: 1px solid var(--ds-border);
+  border-radius: var(--ds-radius-xl);
+  box-shadow: var(--ds-shadow-xs);
   transition:
-    width 0.34s cubic-bezier(0.22, 1, 0.36, 1),
-    background 0.28s ease,
-    box-shadow 0.28s ease;
+    width var(--aside-dur) var(--aside-ease),
+    background calc(var(--aside-dur) * 0.85) var(--aside-ease),
+    box-shadow calc(var(--aside-dur) * 0.85) var(--aside-ease),
+    border-color calc(var(--aside-dur) * 0.85) var(--aside-ease);
   overflow: hidden;
   display: flex;
   flex-direction: column;
@@ -237,10 +369,9 @@ html, body, #app {
 
 .app-aside:hover {
   width: 196px;
-  background: linear-gradient(180deg, rgba(198, 216, 243, 0.98), rgba(181, 203, 234, 0.96));
-  box-shadow:
-    0 18px 34px rgba(37, 99, 235, 0.2),
-    inset 0 1px 0 rgba(255, 255, 255, 0.65);
+  background: var(--ds-bg-card);
+  border-color: var(--ds-border-strong);
+  box-shadow: var(--ds-shadow-md);
 }
 
 .aside-brand {
@@ -252,6 +383,10 @@ html, body, #app {
   justify-content: center;
   gap: 12px;
   background: transparent;
+  transition:
+    justify-content var(--aside-dur) var(--aside-ease),
+    padding var(--aside-dur) var(--aside-ease),
+    margin var(--aside-dur) var(--aside-ease);
 }
 
 .brand-name {
@@ -259,21 +394,28 @@ html, body, #app {
   max-width: 0;
   white-space: nowrap;
   overflow: hidden;
-  transform: translateX(-6px);
+  transform: translateX(-10px);
   transition:
-    max-width 0.3s cubic-bezier(0.22, 1, 0.36, 1),
-    opacity 0.2s ease 0.08s,
-    transform 0.24s ease 0.08s;
-  font-size: 18px;
-  font-weight: 800;
-  letter-spacing: 0.02em;
-  color: #1e293b;
+    max-width var(--aside-dur) var(--aside-ease),
+    opacity calc(var(--aside-dur) * 0.9) var(--aside-ease),
+    transform var(--aside-dur) var(--aside-ease);
+  transition-delay: 0ms;
+  font-family: var(--ds-font-display);
+  font-size: 20px;
+  font-weight: 500;
+  letter-spacing: -0.03em;
+  color: var(--ds-text-primary);
 }
 
 .app-aside:hover .brand-name {
   opacity: 1;
   max-width: 120px;
   transform: translateX(0);
+  transition-delay: 0.06s;
+}
+
+.app-aside:not(:hover) .brand-name {
+  transition-delay: 0ms;
 }
 
 .app-aside:hover .aside-brand {
@@ -288,6 +430,10 @@ html, body, #app {
   justify-content: center;
   padding: 0;
   position: relative;
+}
+
+.aside-brand .brand-logo {
+  transition: transform var(--aside-dur) var(--aside-ease), left var(--aside-dur) var(--aside-ease);
 }
 
 .app-aside:not(:hover) .aside-brand .brand-logo {
@@ -308,14 +454,25 @@ html, body, #app {
   width: 52px;
   height: 44px;
   line-height: 44px;
-  border-radius: 14px;
+  border-radius: var(--ds-radius-md);
   margin: 0 auto 10px;
-  color: #64748b;
+  color: var(--ds-text-muted);
   display: flex;
   align-items: center;
   justify-content: center;
   gap: 0;
-  transition: all 0.26s cubic-bezier(0.22, 1, 0.36, 1);
+  transition:
+    width var(--aside-dur) var(--aside-ease),
+    padding var(--aside-dur) var(--aside-ease),
+    gap var(--aside-dur) var(--aside-ease),
+    border-radius var(--aside-dur) var(--aside-ease),
+    margin var(--aside-dur) var(--aside-ease),
+    justify-content var(--aside-dur) var(--aside-ease),
+    background var(--ds-transition),
+    color var(--ds-transition),
+    box-shadow var(--ds-transition),
+    transform var(--aside-dur) var(--aside-ease);
+  transition-delay: 0ms;
   padding: 0 !important;
   border: none;
   background: transparent;
@@ -332,6 +489,9 @@ html, body, #app {
   justify-content: center;
   flex-shrink: 0;
   margin: 0 !important;
+  transition:
+    transform var(--aside-dur) var(--aside-ease),
+    left var(--aside-dur) var(--aside-ease);
 }
 
 .side-menu .el-menu-item .el-icon svg {
@@ -343,18 +503,15 @@ html, body, #app {
 }
 
 .side-menu .el-menu-item:hover {
-  background: linear-gradient(135deg, rgba(255, 255, 255, 0.52), rgba(219, 234, 254, 0.42));
-  color: #1d4ed8;
-  transform: translateY(-1px) scale(1.015);
+  background: var(--ds-bg-card);
+  color: var(--ds-text-primary);
 }
 
 .side-menu .el-menu-item.is-active {
-  background: linear-gradient(135deg, rgba(37, 99, 235, 0.5), rgba(29, 78, 216, 0.34));
-  color: #1e40af;
-  font-weight: 700;
-  box-shadow:
-    0 12px 22px rgba(37, 99, 235, 0.28),
-    inset 0 1px 0 rgba(255, 255, 255, 0.35);
+  background: var(--ds-bg-card-strong);
+  color: var(--ds-text-primary);
+  font-weight: 500;
+  box-shadow: inset 3px 0 0 var(--ds-primary);
 }
 
 .menu-text {
@@ -362,13 +519,14 @@ html, body, #app {
   max-width: 0;
   white-space: nowrap;
   overflow: hidden;
-  transform: translateX(-6px);
+  transform: translateX(-10px);
   transition:
-    max-width 0.3s cubic-bezier(0.22, 1, 0.36, 1),
-    opacity 0.2s ease 0.06s,
-    transform 0.24s ease 0.06s;
-  font-size: 14px;
-  font-weight: 600;
+    max-width var(--aside-dur) var(--aside-ease),
+    opacity calc(var(--aside-dur) * 0.88) var(--aside-ease),
+    transform var(--aside-dur) var(--aside-ease);
+  transition-delay: 0ms;
+  font-size: 13px;
+  font-weight: 500;
   line-height: 1;
 }
 
@@ -376,21 +534,33 @@ html, body, #app {
   opacity: 1;
   max-width: 120px;
   transform: translateX(0);
+  transition-delay: 0.08s;
+}
+
+.app-aside:not(:hover) .menu-text {
+  transition-delay: 0ms;
 }
 
 .app-aside:hover .side-menu .el-menu-item {
   width: calc(100% - 16px);
   justify-content: flex-start;
-  border-radius: 12px;
+  border-radius: var(--ds-radius-lg);
   padding: 0 12px !important;
   gap: 10px;
 }
 
 .app-aside:hover .side-menu .el-menu-item:nth-child(1) { transition-delay: 0ms; }
-.app-aside:hover .side-menu .el-menu-item:nth-child(2) { transition-delay: 22ms; }
-.app-aside:hover .side-menu .el-menu-item:nth-child(3) { transition-delay: 44ms; }
-.app-aside:hover .side-menu .el-menu-item:nth-child(4) { transition-delay: 66ms; }
-.app-aside:hover .side-menu .el-menu-item:nth-child(5) { transition-delay: 88ms; }
+.app-aside:hover .side-menu .el-menu-item:nth-child(2) { transition-delay: calc(var(--aside-stagger) * 1); }
+.app-aside:hover .side-menu .el-menu-item:nth-child(3) { transition-delay: calc(var(--aside-stagger) * 2); }
+.app-aside:hover .side-menu .el-menu-item:nth-child(4) { transition-delay: calc(var(--aside-stagger) * 3); }
+.app-aside:hover .side-menu .el-menu-item:nth-child(5) { transition-delay: calc(var(--aside-stagger) * 4); }
+
+/* 收起：自下而上依次收回，与展开方向对称 */
+.app-aside:not(:hover) .side-menu .el-menu-item:nth-child(1) { transition-delay: calc(var(--aside-stagger) * 4); }
+.app-aside:not(:hover) .side-menu .el-menu-item:nth-child(2) { transition-delay: calc(var(--aside-stagger) * 3); }
+.app-aside:not(:hover) .side-menu .el-menu-item:nth-child(3) { transition-delay: calc(var(--aside-stagger) * 2); }
+.app-aside:not(:hover) .side-menu .el-menu-item:nth-child(4) { transition-delay: calc(var(--aside-stagger) * 1); }
+.app-aside:not(:hover) .side-menu .el-menu-item:nth-child(5) { transition-delay: 0ms; }
 
 .app-aside:not(:hover) .side-menu .el-menu-item {
   width: 52px;
@@ -417,6 +587,10 @@ html, body, #app {
   gap: var(--ds-space-2);
   color: var(--ds-text-secondary);
   font-size: var(--ds-text-sm);
+  transition:
+    justify-content var(--aside-dur) var(--aside-ease),
+    padding var(--aside-dur) var(--aside-ease),
+    margin var(--aside-dur) var(--aside-ease);
 }
 
 .aside-status .status-text {
@@ -424,19 +598,25 @@ html, body, #app {
   max-width: 0;
   white-space: nowrap;
   overflow: hidden;
-  transform: translateX(-6px);
+  transform: translateX(-8px);
   font-size: 11px;
   line-height: 1;
   transition:
-    max-width 0.3s cubic-bezier(0.22, 1, 0.36, 1),
-    opacity 0.2s ease 0.1s,
-    transform 0.24s ease 0.1s;
+    max-width var(--aside-dur) var(--aside-ease),
+    opacity calc(var(--aside-dur) * 0.85) var(--aside-ease),
+    transform var(--aside-dur) var(--aside-ease);
+  transition-delay: 0ms;
 }
 
 .app-aside:hover .aside-status .status-text {
   opacity: 1;
   max-width: 84px;
   transform: translateX(0);
+  transition-delay: calc(var(--aside-stagger) * 3 + 0.04s);
+}
+
+.app-aside:not(:hover) .aside-status .status-text {
+  transition-delay: 0ms;
 }
 
 .app-aside:hover .aside-status {
@@ -457,6 +637,7 @@ html, body, #app {
   position: absolute;
   left: 50%;
   transform: translateX(-50%);
+  transition: transform var(--aside-dur) var(--aside-ease), left var(--aside-dur) var(--aside-ease);
 }
 
 @media (max-width: 1200px) {
@@ -478,34 +659,13 @@ html, body, #app {
   min-width: 0;
   min-height: 0;
   position: relative;
-  border-radius: 18px;
+  border-radius: var(--ds-radius-xl);
   z-index: 1;
 }
 
-.app-main::before {
-  content: "";
-  position: fixed;
-  top: 84px;
-  right: -120px;
-  width: 360px;
-  height: 360px;
-  border-radius: 50%;
-  background: radial-gradient(circle, rgba(99, 102, 241, 0.16) 0%, rgba(99, 102, 241, 0) 72%);
-  pointer-events: none;
-  z-index: 0;
-}
-
+.app-main::before,
 .app-main::after {
-  content: "";
-  position: fixed;
-  left: -140px;
-  bottom: -120px;
-  width: 380px;
-  height: 380px;
-  border-radius: 50%;
-  background: radial-gradient(circle, rgba(14, 165, 233, 0.14) 0%, rgba(14, 165, 233, 0) 72%);
-  pointer-events: none;
-  z-index: 0;
+  display: none;
 }
 
 .app-main > * {
@@ -553,39 +713,79 @@ html, body, #app {
   overflow: hidden;
 }
 
-.page-fade-slide-enter-active,
-.page-fade-slide-leave-active {
-  transition: opacity 0.22s ease, transform 0.22s ease;
+.page-fade-slide-enter-active {
+  transition:
+    opacity var(--ds-transition-page) var(--ds-ease-out-expo),
+    transform var(--ds-transition-page) var(--ds-ease-out-expo),
+    filter var(--ds-transition-page) var(--ds-ease-out-expo);
 }
 
-.page-fade-slide-enter-from,
+.page-fade-slide-leave-active {
+  transition:
+    opacity 0.22s var(--ds-ease-out-expo),
+    transform 0.24s var(--ds-ease-out-expo);
+}
+
+.page-fade-slide-enter-from {
+  opacity: 0;
+  transform: translateY(14px);
+  filter: blur(2px);
+}
+
 .page-fade-slide-leave-to {
   opacity: 0;
-  transform: translateY(6px);
+  transform: translateY(-8px);
+  filter: blur(1px);
 }
 
-/* Modern global module + button style */
+@media (prefers-reduced-motion: reduce) {
+  .page-fade-slide-enter-active,
+  .page-fade-slide-leave-active {
+    transition: opacity 0.15s ease;
+  }
+  .page-fade-slide-enter-from,
+  .page-fade-slide-leave-to {
+    transform: none;
+    filter: none;
+  }
+}
+
+/* 模块卡片：色块层次为主，hover 轻抬升（DESIGN.md） */
 .app-main .el-card {
-  border-radius: 16px;
-  border: 1px solid rgba(96, 165, 250, 0.24);
-  background: linear-gradient(160deg, rgba(255, 255, 255, 0.9), rgba(239, 246, 255, 0.76));
-  backdrop-filter: blur(8px);
-  box-shadow:
-    0 12px 26px rgba(15, 23, 42, 0.1),
-    inset 0 1px 0 rgba(255, 255, 255, 0.72);
+  border-radius: var(--ds-radius-lg);
+  border: 1px solid var(--ds-border);
+  background: var(--ds-bg-card);
+  box-shadow: none;
+  --el-card-bg-color: var(--ds-bg-card);
+  --el-text-color-primary: var(--ds-text-primary);
+  transition:
+    transform var(--ds-transition) var(--ds-ease-out-expo),
+    box-shadow var(--ds-transition),
+    border-color var(--ds-transition),
+    background var(--ds-transition);
 }
 
 .app-main .el-card:hover {
-  box-shadow:
-    0 18px 34px rgba(30, 64, 175, 0.16),
-    inset 0 1px 0 rgba(255, 255, 255, 0.75);
+  background: var(--ds-bg-card-strong);
+  border-color: var(--ds-border-strong);
+  box-shadow: var(--ds-shadow-md);
+  transform: translateY(-2px);
+}
+
+.app-main .el-card__header {
+  border-bottom-color: var(--ds-border);
+  color: var(--ds-text-primary);
 }
 
 .app-main .el-button {
-  border-radius: 10px;
-  font-weight: 600;
-  letter-spacing: 0.01em;
-  transition: transform 0.16s ease, box-shadow 0.22s ease, background-color 0.22s ease;
+  border-radius: var(--ds-radius-md);
+  font-weight: 500;
+  letter-spacing: 0;
+  transition:
+    transform var(--ds-transition) var(--ds-ease-spring),
+    background-color var(--ds-transition),
+    border-color var(--ds-transition),
+    box-shadow var(--ds-transition);
 }
 
 .app-main .el-button:hover {
@@ -593,18 +793,25 @@ html, body, #app {
 }
 
 .app-main .el-button:active {
-  transform: translateY(0);
+  transform: scale(0.98);
 }
 
 .app-main .el-button--primary {
   border: none;
-  background: linear-gradient(135deg, #3b82f6 0%, #2563eb 56%, #1d4ed8 100%);
-  box-shadow: 0 8px 16px rgba(37, 99, 235, 0.3);
+  background: var(--ds-primary);
+  color: #fff;
+  box-shadow: var(--ds-shadow-xs);
 }
 
 .app-main .el-button--primary:hover {
-  background: linear-gradient(135deg, #5693f8 0%, #2f70ef 56%, #2154da 100%);
-  box-shadow: 0 12px 22px rgba(37, 99, 235, 0.38);
+  background: var(--ds-primary-light);
+  color: #fff;
+  box-shadow: var(--ds-shadow-sm);
+}
+
+.app-main .el-button--primary:active {
+  background: var(--ds-primary-active);
+  box-shadow: none;
 }
 
 @media (prefers-reduced-motion: reduce) {
@@ -614,16 +821,59 @@ html, body, #app {
   .app-main .el-button {
     transition: none !important;
   }
+  .app-main .el-card:hover {
+    transform: none;
+  }
 }
 
 .app-main .el-button--default {
-  border-color: rgba(96, 165, 250, 0.36);
-  background: rgba(239, 246, 255, 0.72);
+  border: 1px solid var(--ds-border);
+  background: var(--ds-bg-page);
+  color: var(--ds-text-primary);
+}
+
+.app-main .el-button--default:hover {
+  background: var(--ds-bg-soft);
+  border-color: var(--ds-border-strong);
+  color: var(--ds-text-primary);
 }
 
 .app-main .el-input__wrapper,
 .app-main .el-textarea__inner,
 .app-main .el-select__wrapper {
-  border-radius: 10px;
+  border-radius: var(--ds-radius-md);
+  background-color: var(--ds-bg-page) !important;
+  box-shadow: 0 0 0 1px var(--ds-border) inset !important;
+  transition: box-shadow var(--ds-transition), background-color var(--ds-transition);
+}
+
+.app-main .el-input__wrapper:hover,
+.app-main .el-select__wrapper:hover {
+  box-shadow: 0 0 0 1px var(--ds-border-strong) inset !important;
+}
+
+.app-main .el-input__wrapper.is-focus,
+.app-main .el-select__wrapper.is-focused {
+  box-shadow: 0 0 0 2px rgba(204, 120, 92, 0.35) inset !important;
+}
+
+.app-main .el-textarea__inner {
+  background-color: var(--ds-bg-page);
+  color: var(--ds-text-primary);
+}
+
+.app-main .el-table {
+  --el-table-bg-color: var(--ds-bg-elevated);
+  --el-table-tr-bg-color: var(--ds-bg-elevated);
+  --el-table-header-bg-color: var(--ds-bg-soft);
+  --el-table-row-hover-bg-color: var(--ds-bg-page);
+  --el-table-border-color: var(--ds-border);
+  --el-table-text-color: var(--ds-text-secondary);
+  --el-table-header-text-color: var(--ds-text-primary);
+}
+
+.app-main .el-pagination {
+  --el-pagination-text-color: var(--ds-text-muted);
+  --el-pagination-button-color: var(--ds-text-secondary);
 }
 </style>

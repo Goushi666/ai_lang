@@ -1,19 +1,23 @@
 """
-认证授权（MVP stub）。
+JWT 与 Bearer 解析。
 
-文档要求 JWT（python-jose）。在 MVP 中我们采用“可选鉴权”：
-- token 缺失：不阻断接口调用
-- token 无效：返回 None（不抛错）
-
-等你需要“强制鉴权”时，再把可选逻辑收紧即可。
+- 可选鉴权：无效/缺失 token 时部分依赖仍返回 None。
+- 强制鉴权：使用 deps 中的 get_current_user。
 """
 
-from typing import Optional
+from __future__ import annotations
+
+from typing import Any, Dict, Optional
 
 from fastapi import Request
 from jose import JWTError, jwt
 
 from app.core.config import settings
+
+
+def jwt_secret() -> str:
+    """与签发令牌使用同一密钥；未配置时使用仅适用于开发的占位值。"""
+    return (settings.JWT_SECRET_KEY or "").strip() or "dev-insecure-secret"
 
 
 def extract_bearer_token(request: Request) -> Optional[str]:
@@ -25,18 +29,19 @@ def extract_bearer_token(request: Request) -> Optional[str]:
     return auth.split(" ", 1)[1].strip()
 
 
-def get_optional_current_user(request: Request) -> Optional[str]:
-    # 如果没有 Authorization: Bearer ...，直接返回 None
-    token = extract_bearer_token(request)
-    if not token:
-        return None
-
-    # MVP：token 无效也不阻断（可在后续改为 enforced）
+def decode_access_token(token: str) -> Optional[Dict[str, Any]]:
     try:
-        payload = jwt.decode(token, settings.JWT_SECRET_KEY, algorithms=[settings.JWT_ALGORITHM])
-        # 约定：sub 作为用户标识（你后续可替换为实际字段）
-        # 返回值目前用于“可选用户上下文”，MVP 暂不用于强制权限控制
-        return payload.get("sub") or payload.get("user")  # type: ignore[return-value]
+        return jwt.decode(token, jwt_secret(), algorithms=[settings.JWT_ALGORITHM])
     except JWTError:
         return None
 
+
+def get_optional_current_user(request: Request) -> Optional[str]:
+    token = extract_bearer_token(request)
+    if not token:
+        return None
+    payload = decode_access_token(token)
+    if not payload:
+        return None
+    sub = payload.get("sub") or payload.get("user")
+    return str(sub) if sub is not None else None

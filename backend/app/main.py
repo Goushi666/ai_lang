@@ -17,6 +17,7 @@ from fastapi import FastAPI, WebSocket
 from fastapi.middleware.cors import CORSMiddleware
 
 from app.api.v1.admin import router as admin_router
+from app.api.v1.auth import router as auth_router
 from app.api.v1.agent import router as agent_router
 from app.api.v1.alarms import router as alarms_router
 from app.api.v1.analysis import router as analysis_router
@@ -31,6 +32,7 @@ from app.repositories.agent_chat_repo import AgentChatRepository
 from app.repositories.alarm_repo import AlarmRepository
 from app.repositories.environment_anomaly_repo import EnvironmentAnomalyRepository
 from app.repositories.sensor_repo import SensorRepository
+from app.repositories.user_repo import UserRepository
 from app.services.alarm_service import AlarmService
 from app.repositories.vehicle_repo import VehicleRepository
 from app.services.sensor_service import SensorService
@@ -60,6 +62,7 @@ from app.services.agent.skills import SkillRegistry
 from app.services.agent.skills.env_diagnosis import EnvDiagnosisSkill
 from app.services.agent.llm import LLMClient
 from app.services.agent.clarifier import Clarifier
+from app.services.auth_service import AuthService
 
 logger = logging.getLogger(__name__)
 
@@ -87,6 +90,7 @@ def create_app() -> FastAPI:
     app.include_router(agent_router, prefix="/api/agent", tags=["agent"])          # 智能 Agent（框架）
     app.include_router(video_router, prefix="/api/video", tags=["video"])        # 车载 MJPEG / HLS 配置与代理
     app.include_router(admin_router, prefix="/api/admin", tags=["admin"])       # 数据维护（清空表等）
+    app.include_router(auth_router, prefix="/api/auth", tags=["auth"])          # 注册 / 登录 / 用户级别
 
     # ---------- 健康检查端点 ----------
     @app.get("/api/health")
@@ -127,6 +131,9 @@ def create_app() -> FastAPI:
         """
         await init_db()
         session_factory = get_session_factory()
+        user_repo = UserRepository(session_factory)
+        app.state.user_repo = user_repo
+        app.state.auth_service = AuthService(user_repo)
         agent_chat_repo = AgentChatRepository(session_factory)
         app.state.agent_chat_repo = agent_chat_repo
         sensor_repo = SensorRepository(session_factory)

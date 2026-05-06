@@ -83,7 +83,34 @@ _VEHICLE_SUFFIX = """
 """
 
 
-def get_system_prompt(mode: str = "general", tool_names: List[str] | None = None) -> str:
+_USER_LEVEL_LINES = {
+    "guest": (
+        "## 当前用户上下文\n"
+        "当前为**未登录/访客**会话：以说明、只读类查询为主；若用户要求**远程控制巡检车/机械臂**、"
+        "或导出大批量敏感数据，应提示先**登录**并由管理员授予「操作员」等相应级别后再操作；勿假装已执行控制。"
+    ),
+    "viewer": (
+        "## 当前用户上下文\n"
+        "当前用户级别为**观察员（viewer）**：可协助查阅传感器、告警、知识库等说明；"
+        "若用户明确要求**车辆/机械臂控制**或**大批量 CSV 导出**，应提示联系**操作员**或**管理员**授权，勿擅自当作已具备权限。"
+    ),
+    "operator": (
+        "## 当前用户上下文\n"
+        "当前用户级别为**操作员（operator）**：可按规范使用传感器、告警、分析、导出及巡检车/机械臂等工具完成运维操作。"
+    ),
+    "admin": (
+        "## 当前用户上下文\n"
+        "当前用户级别为**管理员（admin）**：与操作员同等具备数据与控制类工具权限；"
+        "涉及系统配置、账号与审计要求时须谨慎并如实说明依据。"
+    ),
+}
+
+
+def get_system_prompt(
+    mode: str = "general",
+    tool_names: List[str] | None = None,
+    user_level: str | None = None,
+) -> str:
     """
     根据对话模式和可用工具列表组装 system prompt。
 
@@ -102,6 +129,10 @@ def get_system_prompt(mode: str = "general", tool_names: List[str] | None = None
         parts.append(_TOOL_LIST_HEADER.strip())
         for name in tool_names:
             parts.append(f"- {name}")
+
+    lvl = (user_level or "guest").strip().lower()
+    if lvl in _USER_LEVEL_LINES:
+        parts.append(_USER_LEVEL_LINES[lvl])
 
     parts.append(_STREAMING_REASONING_RULE.strip())
     return "\n\n".join(parts)

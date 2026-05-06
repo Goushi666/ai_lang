@@ -13,7 +13,7 @@ from fastapi import APIRouter, Depends, HTTPException, Request
 from fastapi.responses import FileResponse, StreamingResponse
 
 from app.core.config import settings
-from app.deps import agent_chat_repo_dep, agent_service_dep, knowledge_service_dep
+from app.deps import agent_chat_repo_dep, agent_service_dep, agent_user_level_dep, knowledge_service_dep
 from app.repositories.agent_chat_repo import AgentChatRepository
 from app.schemas.agent import (
     ChatRequest,
@@ -103,6 +103,7 @@ async def agent_health(request: Request):
 async def agent_chat(
     body: ChatRequest,
     service: AgentService = Depends(agent_service_dep),
+    user_level: str = Depends(agent_user_level_dep),
 ):
     _check_enabled()
     return await service.chat(
@@ -110,6 +111,7 @@ async def agent_chat(
         session_id=body.session_id,
         mode=body.mode,
         stream=body.stream,
+        user_level=user_level,
     )
 
 
@@ -117,6 +119,7 @@ async def agent_chat(
 async def agent_chat_stream(
     body: ChatRequest,
     service: AgentService = Depends(agent_service_dep),
+    user_level: str = Depends(agent_user_level_dep),
 ):
     """``data:`` 每行为 JSON：``clarification`` | ``delta`` | ``export_ready`` | ``done``。"""
     _check_enabled()
@@ -128,6 +131,7 @@ async def agent_chat_stream(
             messages=body.messages,
             session_id=body.session_id,
             mode=body.mode,
+            user_level=user_level,
         ):
             yield f"data: {json.dumps(ev, ensure_ascii=False)}\n\n"
 

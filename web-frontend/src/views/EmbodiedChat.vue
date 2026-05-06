@@ -35,7 +35,7 @@
           >
             <div
               v-if="m.role === 'assistant'"
-              class="embodied-msg-bubble"
+              class="embodied-msg-bubble md-body"
               v-html="renderMd(m.content)"
             ></div>
             <div v-else class="embodied-msg-bubble">{{ m.content }}</div>
@@ -241,19 +241,21 @@ onUnmounted(function () {
   width: 48px;
   height: 48px;
   border-radius: var(--ds-radius-full);
-  background: linear-gradient(135deg, #7c3aed 0%, #6366f1 100%);
+  background: linear-gradient(135deg, var(--ds-primary) 0%, var(--ds-primary-active) 100%);
   display: flex;
   align-items: center;
   justify-content: center;
   cursor: pointer;
-  box-shadow: 0 4px 16px rgba(99, 102, 241, 0.4);
-  transition: box-shadow var(--ds-transition), transform var(--ds-transition);
+  box-shadow: var(--ds-shadow-md);
+  transition:
+    box-shadow var(--ds-transition) var(--ds-ease-out-expo),
+    transform var(--ds-transition) var(--ds-ease-spring);
   user-select: none;
   touch-action: none;
 }
 .embodied-ball:hover {
-  box-shadow: 0 6px 24px rgba(99, 102, 241, 0.55);
-  transform: scale(1.06);
+  box-shadow: var(--ds-shadow-lg);
+  transform: scale(1.05);
 }
 .embodied-panel {
   pointer-events: auto;
@@ -262,13 +264,13 @@ onUnmounted(function () {
   bottom: 24px;
   width: 380px;
   height: 520px;
-  border-radius: var(--ds-radius-lg);
-  background: var(--ds-bg-card);
-  box-shadow: 0 8px 40px rgba(0, 0, 0, 0.16);
+  border-radius: var(--ds-radius-xl);
+  background: var(--ds-bg-elevated);
+  box-shadow: var(--ds-shadow-lg);
   display: flex;
   flex-direction: column;
   overflow: hidden;
-  border: 1px solid rgba(99, 102, 241, 0.12);
+  border: 1px solid var(--ds-border);
 }
 .embodied-header {
   flex-shrink: 0;
@@ -276,13 +278,14 @@ onUnmounted(function () {
   align-items: center;
   justify-content: space-between;
   padding: var(--ds-space-3) var(--ds-space-3);
-  background: linear-gradient(135deg, #7c3aed 0%, #6366f1 100%);
+  background: linear-gradient(135deg, var(--ds-primary) 0%, var(--ds-primary-active) 100%);
   color: #fff;
 }
 .embodied-title {
-  font-size: var(--ds-text-base);
-  font-weight: 700;
-  letter-spacing: 0.03em;
+  font-family: var(--ds-font-display);
+  font-size: 17px;
+  font-weight: 500;
+  letter-spacing: -0.02em;
 }
 .embodied-header-actions {
   display: flex;
@@ -315,6 +318,7 @@ onUnmounted(function () {
   display: flex;
   flex-direction: column;
   gap: var(--ds-space-3);
+  background: var(--ds-bg-page);
 }
 .embodied-msg {
   display: flex;
@@ -334,27 +338,17 @@ onUnmounted(function () {
   word-break: break-word;
 }
 .embodied-msg--user .embodied-msg-bubble {
-  background: linear-gradient(135deg, #7c3aed 0%, #6366f1 100%);
+  background: linear-gradient(135deg, var(--ds-primary) 0%, var(--ds-primary-active) 100%);
   color: #fff;
   border-bottom-right-radius: 3px;
 }
 .embodied-msg--assistant .embodied-msg-bubble {
-  background: #f5f3ff;
-  color: var(--ds-text-primary);
+  background: var(--doc-surface-card);
+  color: var(--doc-body);
+  border: 1px solid var(--doc-hairline);
+  border-left: 3px solid rgba(93, 184, 166, 0.45);
   border-bottom-left-radius: 3px;
-}
-.embodied-msg--assistant .embodied-msg-bubble :deep(p) {
-  margin: 0 0 var(--ds-space-2);
-}
-.embodied-msg--assistant .embodied-msg-bubble :deep(p:last-child) {
-  margin-bottom: 0;
-}
-.embodied-msg--assistant .embodied-msg-bubble :deep(code) {
-  background: rgba(99, 102, 241, 0.08);
-  padding: 1px 4px;
-  border-radius: 3px;
-  font-size: var(--ds-text-sm);
-  font-family: var(--ds-font-mono);
+  box-shadow: none;
 }
 .embodied-typing {
   display: flex;
@@ -365,7 +359,7 @@ onUnmounted(function () {
   width: 6px;
   height: 6px;
   border-radius: var(--ds-radius-full);
-  background: #a78bfa;
+  background: var(--ds-primary);
   animation: embodied-bounce 1.2s infinite;
 }
 .embodied-typing span:nth-child(2) { animation-delay: 0.15s; }
@@ -391,7 +385,7 @@ onUnmounted(function () {
   border-color: var(--ds-border);
 }
 .embodied-input-area :deep(.el-textarea__inner:focus) {
-  border-color: #7c3aed;
+  border-color: var(--ds-primary);
 }
 .embodied-send-btn {
   flex-shrink: 0;
@@ -400,16 +394,22 @@ onUnmounted(function () {
   min-height: 36px !important;
   padding: 0 !important;
   border-radius: var(--ds-radius-sm) !important;
-  background: linear-gradient(135deg, #7c3aed 0%, #6366f1 100%) !important;
+  background: linear-gradient(135deg, var(--ds-primary) 0%, var(--ds-primary-active) 100%) !important;
   border: none !important;
 }
-.embodied-fade-enter-active,
+.embodied-fade-enter-active {
+  transition:
+    opacity var(--ds-transition-page) var(--ds-ease-out-expo),
+    transform var(--ds-transition-page) var(--ds-ease-out-expo);
+}
 .embodied-fade-leave-active {
-  transition: opacity var(--ds-transition), transform var(--ds-transition);
+  transition:
+    opacity 0.2s var(--ds-ease-out-expo),
+    transform 0.22s var(--ds-ease-out-expo);
 }
 .embodied-fade-enter-from,
 .embodied-fade-leave-to {
   opacity: 0;
-  transform: translateY(12px) scale(0.95);
+  transform: translateY(16px) scale(0.97);
 }
 </style>

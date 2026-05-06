@@ -34,6 +34,12 @@ class Settings(BaseSettings):
     # --- JWT：密钥仅来自 .env，勿在代码中写死生产密钥 ---
     JWT_SECRET_KEY: str = ""
     JWT_ALGORITHM: str = "HS256"
+    JWT_EXPIRE_MINUTES: int = Field(
+        default=10080,
+        ge=15,
+        le=525600,
+        description="访问令牌有效期（分钟），默认 7 天",
+    )
 
     # --- 数据库 ---
     SQLITE_URL: str = "sqlite+aiosqlite:///./app.db"

@@ -130,6 +130,7 @@ async def init_db() -> None:
     from app.models.alarm import Alarm  # noqa: F401
     from app.models.environment_anomaly import EnvironmentAnomaly  # noqa: F401
     from app.models.sensor import SensorData  # noqa: F401
+    from app.models.user import User  # noqa: F401
 
     engine = _create_engine()
     async with engine.begin() as conn:

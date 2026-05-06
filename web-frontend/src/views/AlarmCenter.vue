@@ -310,11 +310,10 @@ onMounted(() => {
 .page-title {
   margin: 0 0 var(--ds-space-3) 0;
   padding-left: 10px;
-  border-left: 4px solid #3b82f6;
-  font-size: 20px;
-  font-weight: 800;
+  border-left: 4px solid var(--ds-primary);
+  font-size: 22px;
+  font-weight: 500;
   color: var(--ds-text-primary);
-  letter-spacing: 0.02em;
 }
 
 .page-hint {
@@ -342,22 +341,20 @@ onMounted(() => {
 
 .filter-card {
   margin-bottom: var(--ds-space-4);
-  border-radius: var(--ds-radius-md);
-  border: 1px solid rgba(96, 165, 250, 0.24);
-  box-shadow:
-    0 12px 24px rgba(30, 64, 175, 0.12),
-    inset 0 1px 0 rgba(255, 255, 255, 0.66);
+  border-radius: var(--ds-radius-lg);
+  border: 1px solid var(--ds-border);
+  background: var(--ds-bg-card);
+  box-shadow: none;
 }
 .filter-card :deep(.el-card__body) {
   padding: var(--ds-space-4);
 }
 
 .table-card {
-  border-radius: var(--ds-radius-md);
-  border: 1px solid rgba(96, 165, 250, 0.24);
-  box-shadow:
-    0 14px 26px rgba(30, 64, 175, 0.14),
-    inset 0 1px 0 rgba(255, 255, 255, 0.66);
+  border-radius: var(--ds-radius-lg);
+  border: 1px solid var(--ds-border);
+  background: var(--ds-bg-card);
+  box-shadow: none;
 }
 .table-card :deep(.el-card__body) {
   padding: var(--ds-space-3) var(--ds-space-4) var(--ds-space-4);
@@ -380,27 +377,27 @@ onMounted(() => {
   justify-content: flex-end;
   margin-top: var(--ds-space-4);
   padding-top: var(--ds-space-3);
-  border-top: 1px solid rgba(148, 163, 184, 0.22);
+  border-top: 1px solid var(--ds-border);
 }
 
 .table-card :deep(.btn-danger-solid.el-button--danger),
 .filter-actions :deep(.btn-danger-solid.el-button--danger) {
-  --el-button-bg-color: #dc2626;
-  --el-button-border-color: #dc2626;
-  --el-button-hover-bg-color: #ef4444;
-  --el-button-hover-border-color: #ef4444;
-  --el-button-active-bg-color: #b91c1c;
-  --el-button-active-border-color: #b91c1c;
-  background-color: #dc2626 !important;
-  border-color: #dc2626 !important;
+  --el-button-bg-color: var(--ds-danger);
+  --el-button-border-color: var(--ds-danger);
+  --el-button-hover-bg-color: #d75a5a;
+  --el-button-hover-border-color: #d75a5a;
+  --el-button-active-bg-color: #a83838;
+  --el-button-active-border-color: #a83838;
+  background-color: var(--ds-danger) !important;
+  border-color: var(--ds-danger) !important;
   color: #fff !important;
 }
 .table-card :deep(.btn-danger-solid.el-button--danger:hover),
 .table-card :deep(.btn-danger-solid.el-button--danger:focus),
 .filter-actions :deep(.btn-danger-solid.el-button--danger:hover),
 .filter-actions :deep(.btn-danger-solid.el-button--danger:focus) {
-  background-color: #ef4444 !important;
-  border-color: #ef4444 !important;
+  background-color: #d75a5a !important;
+  border-color: #d75a5a !important;
   color: #fff !important;
 }
 .table-card :deep(.btn-danger-solid.el-button--danger.is-disabled),
