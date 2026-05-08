@@ -122,6 +122,11 @@ class LLMClient:
         if max_tokens is not None:
             body["max_tokens"] = max_tokens
 
+        return await self._post_chat_completions(client, body)
+
+    async def _post_chat_completions(
+        self, client: Any, body: Dict[str, Any]
+    ) -> LLMResponse:
         resp = await client.post("chat/completions", json=body)
         resp.raise_for_status()
         data = resp.json()
@@ -135,6 +140,62 @@ class LLMClient:
             finish_reason=choice.get("finish_reason"),
             usage=data.get("usage"),
         )
+
+    async def chat_completion_json(
+        self,
+        messages: List[Dict[str, Any]],
+        *,
+        max_tokens: int = 1024,
+        temperature: float = 0.2,
+    ) -> Dict[str, Any]:
+        """
+        非流式调用，期望模型返回 JSON 对象（尽量使用 response_format，不支持时回退为纯文本解析）。
+        未配置 LLM 时返回空 dict，由调用方使用默认策略。
+        """
+        if not self.is_configured:
+            return {}
+
+        import httpx
+
+        client = await self._ensure_client()
+        base_body: Dict[str, Any] = {
+            "model": self._model,
+            "messages": messages,
+            "stream": False,
+            "max_tokens": max_tokens,
+            "temperature": temperature,
+        }
+
+        async def _one(body: Dict[str, Any]) -> str:
+            resp = await client.post("chat/completions", json=body)
+            resp.raise_for_status()
+            data = resp.json()
+            choice = data["choices"][0]
+            message = (choice.get("message") or {}) if isinstance(choice, dict) else {}
+            return (message.get("content") or "").strip()
+
+        text = ""
+        try:
+            body_json = {**base_body, "response_format": {"type": "json_object"}}
+            text = await _one(body_json)
+        except httpx.HTTPStatusError:
+            text = await _one(base_body)
+        if not text:
+            return {}
+
+        try:
+            parsed = json.loads(text)
+            return parsed if isinstance(parsed, dict) else {}
+        except json.JSONDecodeError:
+            start, end = text.find("{"), text.rfind("}")
+            if start >= 0 and end > start:
+                try:
+                    parsed = json.loads(text[start : end + 1])
+                    return parsed if isinstance(parsed, dict) else {}
+                except json.JSONDecodeError:
+                    pass
+            logger.warning("chat_completion_json: 无法解析 JSON，原文前 200 字: %s", text[:200])
+            return {}
 
     async def chat_completion_stream_round(
         self,

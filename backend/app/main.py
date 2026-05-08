@@ -209,6 +209,22 @@ def create_app() -> FastAPI:
         except Exception:
             logger.exception("知识库初始化失败，入库 API 与 RAG 检索将不可用")
 
+        from app.repositories.agent_memory_repo import AgentMemoryRepository
+        from app.services.agent.memory import AgentMemoryService
+        from app.services.agent.memory.working import WorkingMemoryStore
+
+        _ks_for_mem = getattr(app.state, "knowledge_service", None)
+        _working_mem = WorkingMemoryStore(
+            default_ttl_sec=float(settings.AGENT_MEMORY_WORKING_TTL_SEC),
+        )
+        _agent_mem_repo = AgentMemoryRepository(session_factory)
+        app.state.agent_memory_service = AgentMemoryService(
+            settings=settings,
+            working=_working_mem,
+            repo=_agent_mem_repo,
+            knowledge=_ks_for_mem,
+        )
+
         skill_registry = SkillRegistry()
         skill_registry.register(EnvDiagnosisSkill())
 
@@ -235,6 +251,7 @@ def create_app() -> FastAPI:
             clarifier=clarifier,
             max_tool_rounds=settings.AGENT_MAX_TOOL_ROUNDS,
             chat_repo=agent_chat_repo,
+            memory_service=app.state.agent_memory_service,
         )
 
         # ---------- MQTT 接入（sensor/data 等，见 settings.MQTT_SUBSCRIBE_TOPICS）----------

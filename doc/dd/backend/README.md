@@ -14,5 +14,8 @@
 | [05-API路由-车辆与设备.md](./05-API路由-车辆与设备.md) | 车辆与设备 REST |
 | [06-环境分析模块.md](./06-环境分析模块.md) | AnalysisService、聚合与摘要 API |
 | [07-Agent模块.md](./07-Agent模块.md) | LLM 编排、工具、会话、RAG、与 PRD 对齐及演进方案 |
+| [08-Agent-LangGraph编排架构.md](./08-Agent-LangGraph编排架构.md) | Agent 单图编排：节点/边、JSON 与 SSE 共用 LangGraph |
+| [09-工业Agent-安全审计与反思.md](./09-工业Agent-安全审计与反思.md) | 工业链路：安全审计 Agent、反思机制、与 LangGraph/API 衔接 |
+| [10-Agent多层记忆架构.md](./10-Agent多层记忆架构.md) | 工作/情景/语义/感知四层记忆与注入点 |
 
 **后端需求**见 [`../../prd/backend/`](../../prd/backend/README.md)。**硬件设计**仍以 [`../硬件端设计文档.md`](../硬件端设计文档.md) 为准。

@@ -2,7 +2,10 @@
 
 ## 1. 定位
 
-- **AgentService**（`app/services/agent/service.py`）：编排 LLM、多轮 **工具调用**、会话持久化与流式 SSE。
+- **AgentService**（`app/services/agent/service.py`）：门面层；**对话控制流**由 **LangGraph** 编译图统一执行（非流式 `ainvoke`、SSE `astream` + `custom` 流）。
+- **编排细节**（节点、边、SSE 与 JSON 如何共用一图）：见 [**08-Agent-LangGraph编排架构.md**](./08-Agent-LangGraph编排架构.md)。  
+- **工业 Agent**（安全审计 Agent、反思机制与 LangGraph 衔接）：见 [**09-工业Agent-安全审计与反思.md**](./09-工业Agent-安全审计与反思.md)。  
+- **多层记忆**（工作 / 情景 / 语义 / 感知）：见 [**10-Agent多层记忆架构.md**](./10-Agent多层记忆架构.md)。
 - **路由**：`app/api/v1/agent.py`，挂载前缀 **`/api/agent`**。
 - **产品需求与验收**：[`../../prd/backend/09-智能Agent.md`](../../prd/backend/09-智能Agent.md)。本节补充**与实现对齐的架构表述**及**演进优先级**（不替代 PRD 正文）。
 
@@ -10,9 +13,15 @@
 
 ```
 app/services/agent/
-├── service.py           # AgentService
+├── service.py           # AgentService：ainvoke / astream、标题与落库
+├── graph/               # LangGraph：build、state、nodes、SSE 辅助
+│   ├── build.py
+│   ├── state.py
+│   ├── nodes.py
+│   ├── deps.py
+│   ├── streamutil.py
+│   └── tool_export.py
 ├── clarifier.py
-├── conversation_title.py
 ├── context/
 │   └── session.py       # SessionManager、Session、Message
 ├── llm/
@@ -25,6 +34,9 @@ app/services/agent/
 │   ├── alarm_tools.py
 │   ├── analysis_tools.py
 │   └── knowledge_tools.py   # search_knowledge_base（RAG）
+├── memory/                  # 多层记忆（工作/情景/语义桥/聚合）
+│   ├── working.py
+│   └── service.py
 └── skills/
     ├── base.py
     └── env_diagnosis.py
@@ -39,6 +51,7 @@ RAG 向量与嵌入实现见 **`app/services/knowledge/`**（与 `agent` 包并�
 | GET | `/health` | Agent/LLM/流式/RAG 等开关状态（含 `knowledge_ready` 等） |
 | POST | `/chat` | 非流式对话 |
 | POST | `/chat/stream` | **SSE 流式**（已实现）：`delta` / `done` / `error` |
+| POST | `/memory/perceptual` | 写入感知记忆（多模态引用，需登录） |
 | GET | `/sessions/{session_id}` | 读会话（内存或 SQLite 回补） |
 | DELETE | `/sessions/{session_id}` | 删会话 |
 | GET | `/history` | 历史对话列表 |
@@ -74,7 +87,7 @@ RAG 向量与嵌入实现见 **`app/services/knowledge/`**（与 `agent` 包并�
 
 ## 6. 流式说明
 
-**流式已实现**：`POST /chat/stream` 返回 `text/event-stream`；工具轮在服务端完成，前端主要接收文本增量与结束事件（可额外收到 `type: "tool"` 仅含工具名，不暴露完整 tool JSON）。
+**流式已实现**：`POST /chat/stream` 返回 `text/event-stream`。**与 `POST /chat` 共用同一张 LangGraph**；图中在 `configurable.sse_stream=True` 时通过 `get_stream_writer` 推送 `delta` / `clarification` / `export_ready` / `done`（详见 [08-Agent-LangGraph编排架构.md](./08-Agent-LangGraph编排架构.md) §4）。工具轮仍在服务端完成，前端不接收完整 tool JSON。
 
 ## 7. 安全与配置
 
@@ -94,7 +107,7 @@ PRD 中的 **「MCP + Tool + Skill」** 易被理解为 **Model Context Protocol
 
 | 项 | PRD 期望 | 当前代码 |
 |----|----------|----------|
-| **Clarifier** | 模糊意图返回 `clarification`，前端点选后继续。 | `Clarifier.check()` 固定返回 `None`；**`AgentService` 未调用**，澄清链路未闭合。 |
+| **Clarifier** | 模糊意图返回 `clarification`，前端点选后继续。 | **`graph.nodes.node_clarify`** 调用 `Clarifier.check()`；需追问时走 `finalize_clarify` 分支并返回 `ClarificationPayload`（与 SSE `clarification` 事件对齐）。 |
 | **Skill** | `env_diagnosis` 编排多 Tool。 | `EnvDiagnosisSkill.run()` **占位**；主路径为 **LLM 自主 tool_calls**，无强制 Skill DAG。 |
 | **RAG 相对 PRD §3.2** | Hybrid、`get_document_content`、PDF 等。 | 以向量检索 + Markdown 入库为主；**Hybrid / `get_document_content` / PDF** 未做；引用主要靠模型消费 tool 结果，**`sources` 字段未结构化填充**。 |
 | **PRD 图示 vehicle/report Tool** | 可选扩展。 | Agent **未**注册车控类 Tool（车控仍在 REST `/api/vehicle`）。 |

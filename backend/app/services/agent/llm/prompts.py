@@ -82,6 +82,14 @@ _VEHICLE_SUFFIX = """
 6. 回答简洁，重点在执行结果，不要长篇大论。
 """
 
+_INDUSTRIAL_SAFETY_EXTRA = """
+## 当前模式：工业巡检与遥控（强化安全）
+在常规遥控规范之上，还须遵守：
+1. 任何可能影响人身或设备安全的动作，须在正文中**明确标注风险与前提**；参数接近极限时主动提示。
+2. 优先给出**可验证**的步骤；避免在缺乏状态信息时强行连续多步盲操作。
+3. 服务端可能在工具执行前进行**自动安全审计**；若被要求人工确认，应配合提示用户联系有权限人员。
+"""
+
 
 _USER_LEVEL_LINES = {
     "guest": (
@@ -115,13 +123,19 @@ def get_system_prompt(
     根据对话模式和可用工具列表组装 system prompt。
 
     Args:
-        mode: "general" 或 "rag"
+        mode: general | rag | vehicle | industrial
         tool_names: 当前启用的工具名称列表
     """
     if mode == "rag":
         parts = [_BASE_PROMPT_RAG.strip(), _RAG_SUFFIX.strip()]
     elif mode == "vehicle":
         parts = [_BASE_PROMPT.strip(), _VEHICLE_SUFFIX.strip()]
+    elif mode == "industrial":
+        parts = [
+            _BASE_PROMPT.strip(),
+            _VEHICLE_SUFFIX.strip(),
+            _INDUSTRIAL_SAFETY_EXTRA.strip(),
+        ]
     else:
         parts = [_BASE_PROMPT.strip(), _GENERAL_SUFFIX.strip()]
 

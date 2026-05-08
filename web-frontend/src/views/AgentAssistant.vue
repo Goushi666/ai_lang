@@ -6,6 +6,7 @@
         <el-radio-group v-model="chatMode" size="small" class="mode-switch" :disabled="sending">
           <el-radio-button value="general">通用对话</el-radio-button>
           <el-radio-button value="rag">知识问答</el-radio-button>
+          <el-radio-button value="industrial">工业巡检</el-radio-button>
         </el-radio-group>
       </div>
       <p v-if="health?.message" class="page-sub">{{ health.message }}</p>
@@ -354,7 +355,12 @@ function initConversations() {
     if (!conversations.value.some((x) => x.id === activeId.value) && conversations.value.length) {
       activeId.value = conversations.value[0].id;
     }
-    if (saved.chatMode === "rag" || saved.chatMode === "general") {
+    if (
+      saved.chatMode === "rag" ||
+      saved.chatMode === "general" ||
+      saved.chatMode === "industrial" ||
+      saved.chatMode === "vehicle"
+    ) {
       chatMode.value = saved.chatMode;
     }
     return;
@@ -452,7 +458,12 @@ async function loadMessagesForConversation(c) {
       reasoning: m.reasoning || "",
       _uid: `m-${idx}-${makeId()}`,
     }));
-    if (data.mode === "rag" || data.mode === "general") {
+    if (
+      data.mode === "rag" ||
+      data.mode === "general" ||
+      data.mode === "industrial" ||
+      data.mode === "vehicle"
+    ) {
       chatMode.value = data.mode;
     }
     persistState(conversations.value, activeId.value, chatMode.value);
@@ -567,6 +578,11 @@ async function send() {
           persistState(conversations.value, activeId.value, chatMode.value);
           return;
         }
+        if (ev.type === "audit" || ev.type === "reflection") {
+          /* 最终摘要由 done.reasoning 携带，此处仅触发界面刷新（可选后续做 Toast） */
+          triggerRef(conversations);
+          return;
+        }
         if (ev.type === "delta") {
           const dr = ev.reasoning;
           const dc = ev.content;
@@ -605,7 +621,17 @@ async function send() {
       });
       if (res.session_id) applyServerSessionId(c, res.session_id);
       asst.content = res.content || "";
-      asst.reasoning = res.reasoning || "";
+      let reasoning = res.reasoning || "";
+      if (res.industrial_audit && typeof res.industrial_audit === "object") {
+        const a = res.industrial_audit;
+        reasoning += `\n【安全审计】${a.decision || ""} ${a.risk_tier || ""} ${a.rationale || ""}`.trim();
+      }
+      if (res.industrial_reflection && typeof res.industrial_reflection === "object") {
+        const r = res.industrial_reflection;
+        const issues = Array.isArray(r.issues) ? r.issues.join("；") : "";
+        reasoning += `\n【反思】${r.verdict || ""} ${issues} ${r.rationale || ""}`.trim();
+      }
+      asst.reasoning = reasoning.trim();
       asst.streaming = false;
       if (Array.isArray(res.exports) && res.exports.length) {
         asst.exports = res.exports.map((e) => ({

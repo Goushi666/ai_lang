@@ -144,6 +144,86 @@
           一键清空所选表
         </el-button>
       </el-card>
+
+      <el-card v-if="isAdmin" class="settings-card settings-card--span" shadow="never">
+        <template #header>
+          <div class="settings-hd">
+            <div class="settings-hd-icon">
+              <el-icon><Document /></el-icon>
+            </div>
+            <span>知识文档与 RAG</span>
+          </div>
+        </template>
+        <p class="page-hint settings-lead rag-intro-text">
+          上传 Markdown 到服务器 <code>knowledge_docs</code>，再写入 SQLite <strong>FTS5</strong> 全文索引供 Agent 检索（非独立向量库）。清空索引不会删除磁盘上的 .md。
+        </p>
+        <div class="knowledge-toolbar">
+          <el-upload
+            :show-file-list="false"
+            accept=".md,text/markdown"
+            :disabled="knowledgeUploading"
+            :http-request="onKnowledgeUpload"
+          >
+            <el-button type="primary" class="st-btn" :loading="knowledgeUploading">
+              <el-icon class="st-ico"><Upload /></el-icon>
+              <span>导入 .md 到目录</span>
+            </el-button>
+          </el-upload>
+          <el-button class="st-btn st-btn-secondary" :loading="knowledgeLoading" @click="loadKnowledgeDocs">
+            <el-icon class="st-ico"><Refresh /></el-icon>
+            <span>刷新列表</span>
+          </el-button>
+          <el-button type="primary" class="st-btn" plain :loading="ragImportAllBusy" @click="confirmRagImportAll">
+            一键导入到索引
+          </el-button>
+          <el-button
+            type="danger"
+            class="st-btn btn-danger-solid"
+            :loading="ragClearBusy"
+            @click="confirmRagClear"
+          >
+            清空全文索引
+          </el-button>
+        </div>
+        <p v-if="knowledgeDir" class="page-hint knowledge-dir-line">
+          目录：<code>{{ knowledgeDir }}</code>
+        </p>
+        <el-table
+          v-loading="knowledgeLoading"
+          :data="knowledgeItems"
+          stripe
+          class="knowledge-table"
+          empty-text="暂无 .md，请先上传或放入 knowledge_docs"
+        >
+          <el-table-column prop="filename" label="文件名" min-width="160" show-overflow-tooltip />
+          <el-table-column prop="rag_source_id" label="索引 source" min-width="120" show-overflow-tooltip />
+          <el-table-column label="大小" width="100">
+            <template #default="{ row }">{{ formatBytes(row.size_bytes) }}</template>
+          </el-table-column>
+          <el-table-column label="操作" width="300" fixed="right">
+            <template #default="{ row }">
+              <div class="knowledge-row-actions">
+                <el-button size="small" type="primary" plain :loading="ragRowBusy === row.filename" @click="ragImportOne(row)">
+                  导入索引
+                </el-button>
+                <el-button
+                  size="small"
+                  type="warning"
+                  plain
+                  class="rag-remove-index-btn"
+                  :loading="ragRowBusy === `del:${row.rag_source_id}`"
+                  @click="confirmRagDeleteDoc(row)"
+                >
+                  删索引
+                </el-button>
+                <el-button size="small" type="danger" plain :loading="ragRowBusy === `file:${row.filename}`" @click="confirmDeleteMdFile(row)">
+                  删文件
+                </el-button>
+              </div>
+            </template>
+          </el-table-column>
+        </el-table>
+      </el-card>
     </div>
 
     <el-dialog
@@ -230,7 +310,7 @@
 import { computed, onMounted, ref } from "vue";
 import { useRouter } from "vue-router";
 import { ElMessage, ElMessageBox } from "element-plus";
-import { User, UserFilled, View, CirclePlus, Delete } from "@element-plus/icons-vue";
+import { User, UserFilled, View, CirclePlus, Delete, Document, Upload, Refresh } from "@element-plus/icons-vue";
 import { alarmApi } from "../api/alarm";
 import { adminApi } from "../api/admin";
 import { authMe, authListUsers, authUpdateUserLevel, authRegister, authDeleteUser } from "../api/auth.js";
@@ -263,6 +343,14 @@ const regPassword = ref("");
 const regPassword2 = ref("");
 const regLoading = ref(false);
 
+const knowledgeItems = ref([]);
+const knowledgeDir = ref("");
+const knowledgeLoading = ref(false);
+const knowledgeUploading = ref(false);
+const ragImportAllBusy = ref(false);
+const ragClearBusy = ref(false);
+const ragRowBusy = ref("");
+
 function levelLabel(l) {
   const m = { viewer: "观察员", operator: "操作员", admin: "管理员" };
   return m[l] || l || "—";
@@ -271,6 +359,14 @@ function levelLabel(l) {
 function levelTagType(level) {
   const m = { admin: "danger", operator: "warning", viewer: "info" };
   return m[level] || "info";
+}
+
+function formatBytes(n) {
+  const x = Number(n);
+  if (!Number.isFinite(x) || x < 0) return "—";
+  if (x < 1024) return `${x} B`;
+  if (x < 1024 * 1024) return `${(x / 1024).toFixed(1)} KB`;
+  return `${(x / (1024 * 1024)).toFixed(2)} MB`;
 }
 
 function formatDt(v) {
@@ -430,6 +526,159 @@ async function save() {
   }
 }
 
+async function loadKnowledgeDocs() {
+  if (!isAdmin.value) return;
+  knowledgeLoading.value = true;
+  try {
+    const res = await adminApi.listKnowledgeDocs();
+    knowledgeDir.value = res.directory || "";
+    knowledgeItems.value = res.items || [];
+  } catch (e) {
+    const msg = e?.response?.data?.detail || e?.message || "加载失败";
+    ElMessage.error(typeof msg === "string" ? msg : "加载失败");
+    knowledgeItems.value = [];
+  } finally {
+    knowledgeLoading.value = false;
+  }
+}
+
+async function onKnowledgeUpload(options) {
+  const { file, onSuccess, onError } = options;
+  const name = file?.name || "";
+  if (!name.toLowerCase().endsWith(".md")) {
+    ElMessage.warning("仅支持 .md 文件");
+    onError?.(new Error("not md"));
+    return;
+  }
+  knowledgeUploading.value = true;
+  try {
+    await adminApi.uploadKnowledgeDoc(file);
+    onSuccess?.({});
+    ElMessage.success("已保存到 knowledge_docs");
+    await loadKnowledgeDocs();
+  } catch (e) {
+    onError?.(e);
+    const msg = e?.response?.data?.detail || e?.message || "上传失败";
+    ElMessage.error(typeof msg === "string" ? msg : "上传失败");
+  } finally {
+    knowledgeUploading.value = false;
+  }
+}
+
+async function confirmRagImportAll() {
+  try {
+    await ElMessageBox.confirm(
+      "将扫描 knowledge_docs 下全部 .md 并写入全文索引；同名文档会覆盖索引中的旧块。是否继续？",
+      "一键导入",
+      { type: "info", confirmButtonText: "导入", cancelButtonText: "取消" },
+    );
+  } catch {
+    return;
+  }
+  ragImportAllBusy.value = true;
+  try {
+    const res = await adminApi.ragImportAllFromDocs();
+    const n = res.total_chunks ?? 0;
+    ElMessage.success(`导入完成，共 ${n} 个文本块`);
+    await loadKnowledgeDocs();
+  } catch (e) {
+    const msg = e?.response?.data?.detail || e?.message || "导入失败";
+    ElMessage.error(typeof msg === "string" ? msg : "导入失败");
+  } finally {
+    ragImportAllBusy.value = false;
+  }
+}
+
+async function ragImportOne(row) {
+  ragRowBusy.value = row.filename;
+  try {
+    const res = await adminApi.ragImportOneFromDocs(row.filename);
+    ElMessage.success(`「${row.filename}」已写入索引，${res.chunks ?? 0} 块`);
+  } catch (e) {
+    const msg = e?.response?.data?.detail || e?.message || "导入失败";
+    ElMessage.error(typeof msg === "string" ? msg : "导入失败");
+  } finally {
+    ragRowBusy.value = "";
+  }
+}
+
+async function confirmRagDeleteDoc(row) {
+  try {
+    await ElMessageBox.confirm(
+      `从全文索引中移除「${row.filename}」的全部块（不删磁盘文件）。是否继续？`,
+      "删除索引条目",
+      {
+        type: "warning",
+        confirmButtonText: "删除",
+        cancelButtonText: "取消",
+        confirmButtonClass: "el-button--danger",
+      },
+    );
+  } catch {
+    return;
+  }
+  ragRowBusy.value = `del:${row.rag_source_id}`;
+  try {
+    const res = await adminApi.ragDeleteBySource(row.rag_source_id);
+    ElMessage.success(`已移除 ${res.removed_chunks ?? 0} 块`);
+  } catch (e) {
+    const msg = e?.response?.data?.detail || e?.message || "删除失败";
+    ElMessage.error(typeof msg === "string" ? msg : "删除失败");
+  } finally {
+    ragRowBusy.value = "";
+  }
+}
+
+async function confirmDeleteMdFile(row) {
+  try {
+    await ElMessageBox.confirm(
+      `将永久删除磁盘文件「${row.filename}」，不可恢复；全文索引中的条目不会自动清除。是否继续？`,
+      "删除文件",
+      {
+        type: "error",
+        confirmButtonText: "删除",
+        cancelButtonText: "取消",
+        confirmButtonClass: "el-button--danger",
+      },
+    );
+  } catch {
+    return;
+  }
+  ragRowBusy.value = `file:${row.filename}`;
+  try {
+    await adminApi.deleteKnowledgeDocFile(row.filename);
+    ElMessage.success("已删除文件");
+    await loadKnowledgeDocs();
+  } catch (e) {
+    const msg = e?.response?.data?.detail || e?.message || "删除失败";
+    ElMessage.error(typeof msg === "string" ? msg : "删除失败");
+  } finally {
+    ragRowBusy.value = "";
+  }
+}
+
+async function confirmRagClear() {
+  try {
+    await ElMessageBox.confirm(
+      "将清空 SQLite 中 FTS5 知识索引的全部内容，不可恢复；knowledge_docs 目录下的文件不受影响。是否继续？",
+      "清空全文索引",
+      { type: "error", confirmButtonText: "确认清空", cancelButtonText: "取消" },
+    );
+  } catch {
+    return;
+  }
+  ragClearBusy.value = true;
+  try {
+    await adminApi.ragClearAll();
+    ElMessage.success("全文索引已清空");
+  } catch (e) {
+    const msg = e?.response?.data?.detail || e?.message || "清空失败";
+    ElMessage.error(typeof msg === "string" ? msg : "清空失败");
+  } finally {
+    ragClearBusy.value = false;
+  }
+}
+
 async function confirmPurge() {
   if (!purgeSensor.value && !purgeAnomalies.value) return;
   const parts = [];
@@ -460,9 +709,10 @@ async function confirmPurge() {
   }
 }
 
-onMounted(() => {
+onMounted(async () => {
   load();
-  refreshMe();
+  await refreshMe();
+  if (currentUser.value?.level === "admin") await loadKnowledgeDocs();
 });
 </script>
 
@@ -733,6 +983,52 @@ onMounted(() => {
 
 .risk-intro code {
   background: var(--ds-danger-light);
+}
+
+.rag-intro-text {
+  margin: 0 0 var(--ds-space-3);
+}
+
+.knowledge-toolbar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--ds-space-2);
+  margin-bottom: var(--ds-space-3);
+}
+
+.knowledge-toolbar .st-btn {
+  width: auto;
+  min-width: 0;
+}
+
+.knowledge-dir-line {
+  margin: 0 0 var(--ds-space-2);
+  font-size: var(--ds-text-xs);
+}
+
+.knowledge-table {
+  width: 100%;
+  border-radius: 12px;
+  overflow: hidden;
+}
+
+.knowledge-row-actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+}
+
+/* warning plain 在表格条纹背景上偏淡，加强删索引可读性 */
+.settings-page :deep(.rag-remove-index-btn.el-button--warning.is-plain) {
+  --el-button-text-color: #b45309;
+  --el-button-border-color: #d97706;
+  --el-button-bg-color: rgba(217, 119, 6, 0.12);
+  --el-button-hover-text-color: #92400e;
+  --el-button-hover-border-color: #b45309;
+  --el-button-hover-bg-color: rgba(217, 119, 6, 0.2);
+  font-weight: 600;
 }
 
 .risk-checks {

@@ -5,46 +5,24 @@ from __future__ import annotations
 import asyncio
 import logging
 from typing import Any, AsyncIterator, Dict, List, Optional
-from urllib.parse import quote
-
 from app.core.config import settings
 
 from app.schemas.agent import (
     ChatMessage,
     ChatResponse,
-    ClarificationOption as SchemaClarificationOption,
     ClarificationPayload,
     ExportDownloadItem,
 )
 
 from .clarifier import Clarifier
-from .context.session import Message, Session, SessionManager
-from .llm.client import LLMClient, LLMResponse
-from .llm.prompts import get_system_prompt
+from .context.session import Session, SessionManager
+from .graph.build import build_agent_graph
+from .graph.deps import AgentGraphDeps
+from .llm.client import LLMClient
 from .skills import SkillRegistry
 from .tools import ToolRegistry
-from .tools.base import ToolResult
 
 logger = logging.getLogger(__name__)
-
-
-_EXPORT_DOWNLOAD_TOOL_NAMES = frozenset(
-    {"export_csv_file", "export_sensor_history_csv", "export_alarms_history_csv"},
-)
-
-
-def _export_download_from_tool_result(tool_name: str, result: ToolResult) -> Optional[Dict[str, str]]:
-    if tool_name not in _EXPORT_DOWNLOAD_TOOL_NAMES or not result.ok:
-        return None
-    data = result.data or {}
-    fn = data.get("filename")
-    if not isinstance(fn, str) or not fn.strip():
-        return None
-    fn = fn.strip()
-    return {
-        "filename": fn,
-        "download_path": f"/api/agent/export-download?filename={quote(fn, safe='')}",
-    }
 
 
 async def _emit_sse_text_fragments(
@@ -74,9 +52,9 @@ class AgentService:
 
     职责：
     1. 维护对话会话（SessionManager）
-    2. 组装 MCP 上下文（system prompt + tool 声明 + 对话历史）
-    3. 调用 LLM，解析 tool_calls，执行工具，循环直到产出最终回答
-    4. 返回 ChatResponse
+    2. 编译并运行 LangGraph：澄清 → 构建上下文 → LLM ⟷ 工具 → 收尾
+    3. ``chat`` 使用 ``ainvoke``；``chat_sse_events`` 使用 ``astream(custom)`` 与图内 ``get_stream_writer`` 对齐事件
+    4. 组装 ``ChatResponse`` / SSE JSON 载荷
     """
 
     def __init__(
@@ -88,6 +66,7 @@ class AgentService:
         clarifier: Clarifier,
         max_tool_rounds: int = 10,
         chat_repo: Any = None,
+        memory_service: Any = None,
     ):
         self._sessions = session_manager
         self._tools = tool_registry
@@ -96,6 +75,8 @@ class AgentService:
         self._clarifier = clarifier
         self._max_tool_rounds = max_tool_rounds
         self._chat_repo = chat_repo
+        self._memory_service = memory_service
+        self._agent_graph = build_agent_graph(AgentGraphDeps(service=self))
 
     @staticmethod
     def _sync_conversation_title_done_flag(session: Session, transcript: List[ChatMessage]) -> None:
@@ -302,6 +283,39 @@ class AgentService:
             + appendix
         )
 
+    async def _append_memory_context(
+        self,
+        *,
+        session_id: str,
+        mode: str,
+        last_user: str,
+        system_prompt: str,
+    ) -> str:
+        """多层记忆：工作 / 情景 / 语义 / 感知 注入 system（在 RAG 等之后）。"""
+        mem = self._memory_service
+        if mem is None:
+            return system_prompt
+        try:
+            appendix = await mem.build_system_appendix(
+                conversation_id=session_id,
+                last_user=last_user,
+                mode=mode,
+            )
+        except Exception as exc:
+            logger.warning("多层记忆注入失败: %s", exc)
+            return system_prompt
+        if not appendix:
+            return system_prompt
+        return system_prompt + "\n\n" + appendix
+
+    def touch_working_memory(self, session_id: str, last_user: str) -> None:
+        if self._memory_service is None:
+            return
+        try:
+            self._memory_service.touch_user_turn(session_id, last_user)
+        except Exception as exc:
+            logger.debug("touch_working_memory: %s", exc)
+
     # ------------------------------------------------------------------
     # 对话主入口
     # ------------------------------------------------------------------
@@ -316,143 +330,38 @@ class AgentService:
         user_level: str = "guest",
     ) -> ChatResponse:
         """
-        处理一次用户对话请求。
+        处理一次用户对话请求（非流式）。
 
-        当前为框架实现：
-        - 管理 session
-        - 组装 prompt
-        - 调用 LLM（stub 模式下返回占位）
-        - 未来：tool_calls 循环
+        编排由 LangGraph 完成：ingest → clarify → build_system → llm ⟷ tools → finalize。
+        SSE 与 JSON 共用同一张编译图；SSE 通过 ``configurable.sse_stream`` + custom stream 推送增量。
         """
+        del stream  # API 保留字段；非流式入口不使用
         session = self._sessions.get_or_create(session_id, mode=mode)
-        session.mode = mode
-
-        # 客户端每次携带完整 transcripts 时，用请求体覆盖内存会话，避免重复追加
-        session.messages.clear()
-        for msg in messages:
-            session.add_message(
-                Message(
-                    role=msg.role,
-                    content=msg.content,
-                    reasoning=msg.reasoning if msg.role == "assistant" else None,
-                )
-            )
-        self._sync_conversation_title_done_flag(session, messages)
-
-        # 仅对「本轮最后一条 user」做澄清（不额外调用大模型）
-        last_user = ""
-        for msg in reversed(messages):
-            if msg.role == "user":
-                last_user = msg.content or ""
-                break
-        cq = await self._clarifier.check(last_user, session_mode=session.mode)
-        if cq is not None:
-            session.add_message(Message(role="assistant", content=cq.question))
-            conv_title = await self._finalize_title_and_persist(session)
-            return ChatResponse(
-                content=cq.question,
-                session_id=session.id,
-                framework=not self._llm.is_configured,
-                clarification=ClarificationPayload(
-                    question=cq.question,
-                    options=[
-                        SchemaClarificationOption(label=o.label, value=o.value)
-                        for o in cq.options
-                    ],
-                    allow_custom=cq.allow_custom,
-                ),
-                reasoning=None,
-                usage=None,
-                conversation_title=conv_title,
-            )
-
-        # 组装 system prompt
-        system_prompt = get_system_prompt(
-            mode=session.mode,
-            tool_names=self._tools.list_names() or None,
-            user_level=user_level,
+        result = await self._agent_graph.ainvoke(
+            {
+                "session": session,
+                "request_messages": messages,
+                "mode": mode,
+                "user_level": user_level,
+                "max_tool_rounds": self._max_tool_rounds,
+            }
         )
-        system_prompt = await self._append_rag_retrieval(
-            mode=session.mode,
-            last_user=last_user,
-            system_prompt=system_prompt,
+        clarification = result.get("clarification")
+        exports_raw = result.get("collected_exports") or []
+        clarification_model = (
+            clarification if isinstance(clarification, ClarificationPayload) else None
         )
-
-        # 构建 LLM messages
-        llm_messages: List[Dict[str, Any]] = [
-            {"role": "system", "content": system_prompt},
-        ]
-        llm_messages.extend(session.to_llm_messages())
-
-        # 获取 tool 声明
-        tool_declarations = self._tools.list_declarations() or None
-
-        # --- 调用 LLM（tool-call 循环） ---
-        final_content = ""
-        final_reasoning: Optional[str] = None
-        usage: Dict[str, int] = {}
-        collected_exports: List[ExportDownloadItem] = []
-
-        for _round in range(self._max_tool_rounds):
-            llm_resp: LLMResponse = await self._llm.chat_completion(
-                messages=llm_messages,
-                tools=tool_declarations,
-            )
-
-            if llm_resp.usage:
-                usage = llm_resp.usage
-
-            # 如果 LLM 返回纯文本（无 tool_calls），结束循环
-            if not llm_resp.tool_calls:
-                final_content = llm_resp.content or ""
-                final_reasoning = llm_resp.reasoning
-                break
-
-            # --- 有 tool_calls：执行工具并将结果注入 messages ---
-            # 先把 assistant 的 tool_calls 消息加入上下文
-            llm_messages.append({
-                "role": "assistant",
-                "content": llm_resp.content or "",
-                "tool_calls": llm_resp.tool_calls,
-            })
-
-            for tc in llm_resp.tool_calls:
-                func = tc.get("function", {})
-                tool_name = func.get("name", "")
-                try:
-                    import json as _json
-                    tool_args = _json.loads(func.get("arguments", "{}"))
-                except Exception:
-                    tool_args = {}
-
-                result = await self._tools.execute(tool_name, **tool_args)
-                link = _export_download_from_tool_result(tool_name, result)
-                if link:
-                    collected_exports.append(ExportDownloadItem(**link))
-
-                llm_messages.append({
-                    "role": "tool",
-                    "tool_call_id": tc.get("id", ""),
-                    "content": result.to_message_content(),
-                })
-        else:
-            # 达到最大轮次
-            final_content = final_content or "抱歉，分析过程超出了最大工具调用轮次限制。"
-
-        # 将 assistant 回复写入 session
-        session.add_message(
-            Message(role="assistant", content=final_content, reasoning=final_reasoning)
-        )
-        conv_title = await self._finalize_title_and_persist(session)
-
         return ChatResponse(
-            content=final_content,
+            content=result.get("final_content") or "",
             session_id=session.id,
-            framework=not self._llm.is_configured,
-            reasoning=final_reasoning,
-            usage=usage or None,
-            conversation_title=conv_title,
-            exports=collected_exports,
+            framework=bool(result.get("framework", not self._llm.is_configured)),
+            clarification=clarification_model,
+            reasoning=result.get("final_reasoning"),
+            usage=result.get("usage") or None,
+            conversation_title=result.get("conversation_title"),
+            exports=[ExportDownloadItem(**x) for x in exports_raw],
+            industrial_audit=result.get("audit_result"),
+            industrial_reflection=result.get("reflection_result"),
         )
 
     async def chat_sse_events(
@@ -464,157 +373,39 @@ class AgentService:
         user_level: str = "guest",
     ) -> AsyncIterator[Dict[str, Any]]:
         """
-        供 SSE 使用：澄清 / 工具循环与 chat() 一致；最终回复按配置输出 delta（思考与正文分离）。
+        供 SSE 使用：与 ``chat()`` 共用同一张 LangGraph。
+
+        通过 ``astream(..., stream_mode=[\"custom\",\"values\"])`` 消费节点内
+        ``get_stream_writer`` 推送的事件（delta / export_ready / clarification / done）。
         """
         session = self._sessions.get_or_create(session_id, mode=mode)
-        session.mode = mode
-        session.messages.clear()
-        for msg in messages:
-            session.add_message(
-                Message(
-                    role=msg.role,
-                    content=msg.content,
-                    reasoning=msg.reasoning if msg.role == "assistant" else None,
-                )
-            )
-        self._sync_conversation_title_done_flag(session, messages)
+        initial: Dict[str, Any] = {
+            "session": session,
+            "request_messages": messages,
+            "mode": mode,
+            "user_level": user_level,
+            "max_tool_rounds": self._max_tool_rounds,
+        }
+        graph_config: Dict[str, Any] = {"configurable": {"sse_stream": True}}
 
-        last_user = ""
-        for msg in reversed(messages):
-            if msg.role == "user":
-                last_user = msg.content or ""
-                break
-        cq = await self._clarifier.check(last_user, session_mode=session.mode)
-        if cq is not None:
-            session.add_message(Message(role="assistant", content=cq.question))
-            conv_title = await self._finalize_title_and_persist(session)
-            yield {
-                "type": "clarification",
-                "session_id": session.id,
-                "question": cq.question,
-                "options": [{"label": o.label, "value": o.value} for o in cq.options],
-                "allow_custom": cq.allow_custom,
-            }
-            yield {"type": "done", "session_id": session.id, "conversation_title": conv_title}
-            return
-
-        system_prompt = get_system_prompt(
-            mode=session.mode,
-            tool_names=self._tools.list_names() or None,
-            user_level=user_level,
-        )
-        system_prompt = await self._append_rag_retrieval(
-            mode=session.mode,
-            last_user=last_user,
-            system_prompt=system_prompt,
-        )
-        llm_messages: List[Dict[str, Any]] = [{"role": "system", "content": system_prompt}]
-        llm_messages.extend(session.to_llm_messages())
-        tool_declarations = self._tools.list_declarations() or None
-        usage: Dict[str, int] = {}
-
-        for _round in range(self._max_tool_rounds):
-            llm_resp: Optional[LLMResponse] = None
-            if settings.AGENT_STREAM_ENABLED:
-                async for ev in self._llm.chat_completion_stream_round(
-                    llm_messages,
-                    tool_declarations,
-                ):
-                    if ev.get("kind") == "delta":
-                        if ev.get("reasoning"):
-                            async for out in _emit_sse_text_fragments(
-                                "reasoning", ev["reasoning"]
-                            ):
-                                yield out
-                        if ev.get("content"):
-                            async for out in _emit_sse_text_fragments(
-                                "content", ev["content"]
-                            ):
-                                yield out
-                    elif ev.get("kind") == "final":
-                        llm_resp = ev["response"]
-                if llm_resp is None:
-                    msg = "抱歉，未能获取模型响应。"
-                    session.add_message(Message(role="assistant", content=msg))
-                    conv_title = await self._finalize_title_and_persist(session)
-                    yield {
-                        "type": "done",
-                        "session_id": session.id,
-                        "usage": usage,
-                        "reasoning": None,
-                        "content": msg,
-                        "conversation_title": conv_title,
-                    }
-                    return
-            else:
-                llm_resp = await self._llm.chat_completion(
-                    messages=llm_messages,
-                    tools=tool_declarations,
-                )
-
-            if llm_resp.usage:
-                usage = llm_resp.usage
-
-            if not llm_resp.tool_calls:
-                final_reasoning = llm_resp.reasoning
-                final_content = llm_resp.content or ""
-                session.add_message(
-                    Message(
-                        role="assistant",
-                        content=final_content,
-                        reasoning=final_reasoning,
-                    )
-                )
-                conv_title = await self._finalize_title_and_persist(session)
-                yield {
-                    "type": "done",
-                    "session_id": session.id,
-                    "usage": usage,
-                    "reasoning": final_reasoning,
-                    "content": final_content,
-                    "conversation_title": conv_title,
-                }
-                return
-
-            llm_messages.append({
-                "role": "assistant",
-                "content": llm_resp.content or "",
-                "tool_calls": llm_resp.tool_calls,
-            })
-            for tc in llm_resp.tool_calls:
-                func = tc.get("function", {})
-                tool_name = func.get("name", "")
-                try:
-                    import json as _json
-                    tool_args = _json.loads(func.get("arguments", "{}"))
-                except Exception:
-                    tool_args = {}
-                result = await self._tools.execute(tool_name, **tool_args)
-                link = _export_download_from_tool_result(tool_name, result)
-                if link:
-                    yield {
-                        "type": "export_ready",
-                        "session_id": session.id,
-                        "filename": link["filename"],
-                        "download_path": link["download_path"],
-                    }
-                llm_messages.append({
-                    "role": "tool",
-                    "tool_call_id": tc.get("id", ""),
-                    "content": result.to_message_content(),
-                })
-        else:
-            msg = "抱歉，分析过程超出了最大工具调用轮次限制。"
-            session.add_message(Message(role="assistant", content=msg))
-            conv_title = await self._finalize_title_and_persist(session)
-            yield {
-                "type": "done",
-                "session_id": session.id,
-                "usage": usage,
-                "reasoning": None,
-                "content": msg,
-                "conversation_title": conv_title,
-            }
+        async for stream_mode, chunk in self._agent_graph.astream(
+            initial,
+            config=graph_config,
+            stream_mode=["custom", "values"],
+        ):
+            if stream_mode != "custom":
+                continue
+            if not isinstance(chunk, dict):
+                continue
+            typ = chunk.get("type")
+            if typ == "delta":
+                field = chunk.get("field")
+                text = chunk.get("text") or ""
+                if text and field in ("reasoning", "content"):
+                    async for out in _emit_sse_text_fragments(str(field), text):
+                        yield out
+                continue
+            yield chunk
 
     # ------------------------------------------------------------------
     # 会话管理
@@ -647,6 +438,11 @@ class AgentService:
 
     async def delete_session(self, session_id: str) -> bool:
         ok = self._sessions.delete(session_id)
+        if self._memory_service is not None:
+            try:
+                await self._memory_service.delete_session(session_id)
+            except Exception as exc:
+                logger.debug("delete_session memory: %s", exc)
         if self._chat_repo is not None:
             db_ok = await self._chat_repo.delete_conversation(session_id)
             return ok or db_ok

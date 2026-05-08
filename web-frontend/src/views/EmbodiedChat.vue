@@ -33,11 +33,62 @@
             :key="m._uid"
             :class="['embodied-msg', m.role === 'user' ? 'embodied-msg--user' : 'embodied-msg--assistant']"
           >
-            <div
-              v-if="m.role === 'assistant'"
-              class="embodied-msg-bubble md-body"
-              v-html="renderMd(m.content)"
-            ></div>
+            <template v-if="m.role === 'assistant'">
+              <div class="embodied-assistant-stack">
+                <details
+                  v-if="m.reasoning && !m.streaming"
+                  class="embodied-think"
+                  open
+                >
+                  <summary class="embodied-think-summary">已深度思考</summary>
+                  <div class="embodied-think-body">{{ m.reasoning }}</div>
+                </details>
+                <div
+                  :class="['embodied-msg-bubble', 'md-body', { 'is-streaming': m.streaming }]"
+                >
+                  <div
+                    v-if="m.streaming"
+                    class="streaming-stack streaming-md"
+                  >
+                    <template v-if="m.reasoning">
+                      <div class="stream-phase-row">
+                        <span class="stream-phase-label">思考</span>
+                      </div>
+                      <div
+                        class="stream-md stream-md--reason"
+                        v-html="renderMd(m.reasoning)"
+                      />
+                    </template>
+                    <template v-if="m.content">
+                      <div
+                        v-if="m.reasoning"
+                        class="stream-phase-row stream-phase-row--gap"
+                      >
+                        <span class="stream-phase-label">回答</span>
+                      </div>
+                      <div
+                        class="stream-md stream-md--answer"
+                        v-html="renderMd(m.content)"
+                      />
+                    </template>
+                    <span class="stream-caret stream-caret--md" aria-hidden="true">▍</span>
+                  </div>
+                  <div v-else v-html="renderMd(m.content || '')" />
+                </div>
+                <div v-if="m.exports?.length" class="embodied-export-bar">
+                  <span class="embodied-export-label">导出</span>
+                  <a
+                    v-for="(exp, ei) in m.exports"
+                    :key="`${exp.filename}-${ei}`"
+                    class="embodied-export-link"
+                    :href="exportFullHref(exp)"
+                    :download="exp.filename"
+                  >
+                    {{ exp.filename }}
+                  </a>
+                </div>
+              </div>
+            </template>
             <div v-else class="embodied-msg-bubble">{{ m.content }}</div>
           </div>
           <div v-if="sending" class="embodied-typing">
@@ -69,7 +120,7 @@
 </template>
 
 <script setup>
-import { ref, nextTick, onUnmounted } from "vue";
+import { ref, nextTick, onUnmounted, triggerRef } from "vue";
 import { Monitor, Delete, Close, Promotion } from "@element-plus/icons-vue";
 import { renderMarkdown } from "@/utils/markdown";
 import { agentChatStream } from "@/api/agent";
@@ -84,11 +135,34 @@ let uidSeq = 0;
 
 const WELCOME_TEXT = "你好，我可以帮你控制机械臂和巡检车。";
 const messages = ref([
-  { role: "assistant", content: WELCOME_TEXT, _uid: ++uidSeq },
+  {
+    role: "assistant",
+    content: WELCOME_TEXT,
+    reasoning: "",
+    streaming: false,
+    exports: [],
+    _uid: ++uidSeq,
+  },
 ]);
 
 function renderMd(text) {
   return renderMarkdown(text || "");
+}
+
+function exportFullHref(exp) {
+  const base = import.meta.env.VITE_API_BASE_URL || "";
+  const p = exp?.download_path || "";
+  if (!p) return "#";
+  return `${base}${p}`;
+}
+
+/** 与智能助手页一致：done 终态可能比 delta 链短，避免误覆盖变短 */
+function mergeStreamedField(accumulated, doneVal) {
+  const a = accumulated == null ? "" : String(accumulated);
+  const d = doneVal == null || doneVal === "" ? "" : String(doneVal);
+  if (!d) return a;
+  if (!a) return d;
+  return d.length >= a.length ? d : a;
 }
 
 function scrollBottom() {
@@ -101,7 +175,14 @@ function scrollBottom() {
 function clearMessages() {
   if (sending.value) return;
   messages.value = [
-    { role: "assistant", content: WELCOME_TEXT, _uid: ++uidSeq },
+    {
+      role: "assistant",
+      content: WELCOME_TEXT,
+      reasoning: "",
+      streaming: false,
+      exports: [],
+      _uid: ++uidSeq,
+    },
   ];
   sessionId.value = null;
 }
@@ -130,6 +211,8 @@ async function send() {
     role: "assistant",
     content: "",
     reasoning: "",
+    streaming: true,
+    exports: [],
     _uid: ++uidSeq,
   };
   messages.value.push(assistantMsg);
@@ -144,14 +227,36 @@ async function send() {
         session_id: sessionId.value,
       },
       function (ev) {
-        if (ev.type === "delta") {
-          if (ev.content) assistantMsg.content += ev.content;
-          if (ev.reasoning) assistantMsg.reasoning += ev.reasoning;
+        if (ev.type === "export_ready") {
+          if (!Array.isArray(assistantMsg.exports)) assistantMsg.exports = [];
+          assistantMsg.exports.push({
+            filename: ev.filename || "export.csv",
+            download_path: ev.download_path || "",
+          });
+          triggerRef(messages);
           scrollBottom();
-        } else if (ev.type === "done") {
+          return;
+        }
+        if (ev.type === "delta") {
+          if (ev.content) assistantMsg.content += String(ev.content);
+          if (ev.reasoning) assistantMsg.reasoning += String(ev.reasoning);
+          triggerRef(messages);
+          scrollBottom();
+          return;
+        }
+        if (ev.type === "done") {
+          assistantMsg.streaming = false;
           if (ev.session_id) sessionId.value = ev.session_id;
-          if (ev.content && !assistantMsg.content)
-            assistantMsg.content = ev.content;
+          assistantMsg.reasoning = mergeStreamedField(
+            assistantMsg.reasoning,
+            ev.reasoning
+          );
+          assistantMsg.content = mergeStreamedField(
+            assistantMsg.content,
+            ev.content
+          );
+          triggerRef(messages);
+          scrollBottom();
         }
       },
       abortCtrl.signal
@@ -160,9 +265,12 @@ async function send() {
     if (e.name !== "AbortError") {
       assistantMsg.content =
         assistantMsg.content || "请求失败: " + e.message;
+      assistantMsg.streaming = false;
     }
   } finally {
     sending.value = false;
+    assistantMsg.streaming = false;
+    triggerRef(messages);
     abortCtrl = null;
     scrollBottom();
   }
@@ -329,6 +437,57 @@ onUnmounted(function () {
 .embodied-msg--assistant {
   justify-content: flex-start;
 }
+.embodied-assistant-stack {
+  max-width: 100%;
+  display: flex;
+  flex-direction: column;
+  gap: var(--ds-space-2);
+}
+.embodied-think {
+  max-width: 85%;
+  padding: var(--ds-space-2);
+  border-radius: var(--ds-radius-sm);
+  background: var(--ds-bg-soft);
+  border: 1px solid var(--ds-border-light);
+  font-size: var(--ds-text-xs);
+  color: var(--ds-text-secondary);
+}
+.embodied-think-summary {
+  cursor: pointer;
+  font-weight: 600;
+  color: var(--ds-text-primary);
+}
+.embodied-think-body {
+  margin-top: var(--ds-space-1);
+  white-space: pre-wrap;
+  word-break: break-word;
+  max-height: 120px;
+  overflow-y: auto;
+}
+.embodied-export-bar {
+  max-width: 85%;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--ds-space-2);
+  padding: var(--ds-space-2);
+  font-size: var(--ds-text-xs);
+  background: var(--ds-primary-bg);
+  border-radius: var(--ds-radius-sm);
+  border: 1px solid var(--ds-primary-lighter);
+}
+.embodied-export-label {
+  color: var(--ds-text-secondary);
+  flex-shrink: 0;
+}
+.embodied-export-link {
+  color: var(--ds-primary);
+  text-decoration: none;
+  font-weight: 500;
+}
+.embodied-export-link:hover {
+  text-decoration: underline;
+}
 .embodied-msg-bubble {
   max-width: 85%;
   padding: var(--ds-space-2) var(--ds-space-3);
@@ -349,6 +508,49 @@ onUnmounted(function () {
   border-left: 3px solid rgba(93, 184, 166, 0.45);
   border-bottom-left-radius: 3px;
   box-shadow: none;
+}
+.embodied-msg--assistant .embodied-msg-bubble.is-streaming {
+  min-height: 2.5em;
+}
+.streaming-stack {
+  font-size: var(--ds-text-sm);
+  line-height: 1.55;
+  word-break: break-word;
+}
+.streaming-md .stream-phase-row {
+  margin-bottom: var(--ds-space-1);
+}
+.streaming-md .stream-phase-row--gap {
+  margin-top: var(--ds-space-2);
+}
+.stream-md--reason :deep(p:last-child),
+.stream-md--answer :deep(p:last-child) {
+  margin-bottom: 0;
+}
+.stream-phase-label {
+  display: inline;
+  margin-right: var(--ds-space-2);
+  font-size: var(--ds-text-xs);
+  font-weight: 600;
+  user-select: none;
+  color: var(--ds-text-secondary);
+}
+.stream-caret {
+  display: inline;
+  margin-left: 1px;
+  font-weight: 300;
+  vertical-align: baseline;
+  animation: embodied-caret-blink 1s step-end infinite;
+}
+.stream-caret--md {
+  display: inline-block;
+  margin-top: 2px;
+  vertical-align: text-bottom;
+}
+@keyframes embodied-caret-blink {
+  50% {
+    opacity: 0;
+  }
 }
 .embodied-typing {
   display: flex;

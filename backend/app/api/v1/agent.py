@@ -20,6 +20,7 @@ from app.schemas.agent import (
     ChatResponse,
     KnowledgeIngestRequest,
     KnowledgeStatusResponse,
+    PerceptualMemoryIngestRequest,
     SessionListItem,
     SessionListResponse,
     SessionResponse,
@@ -92,6 +93,12 @@ async def agent_health(request: Request):
         "knowledge_ready": ks is not None,
         "knowledge_chunks": kb_chunks,
         "rag_retrieval_ready": rag_tool,
+        "industrial_audit_tiered": getattr(settings, "AGENT_INDUSTRIAL_AUDIT_TIERED", True),
+        "tools_parallel": getattr(settings, "AGENT_TOOLS_PARALLEL", True),
+        "industrial_reflection_mode": getattr(
+            settings, "AGENT_INDUSTRIAL_REFLECTION_MODE", "conditional"
+        ),
+        "memory_layers_enabled": getattr(settings, "AGENT_MEMORY_LAYERS_ENABLED", True),
     }
 
 
@@ -144,6 +151,28 @@ async def agent_chat_stream(
             "X-Accel-Buffering": "no",
         },
     )
+
+
+@router.post("/memory/perceptual", summary="写入感知记忆（多模态引用）")
+async def ingest_perceptual_memory(
+    body: PerceptualMemoryIngestRequest,
+    request: Request,
+    user_level: str = Depends(agent_user_level_dep),
+):
+    """供巡检/视频等子系统把帧或片段引用写入 Agent 感知层；需已登录。"""
+    _check_enabled()
+    if user_level == "guest":
+        raise HTTPException(status_code=401, detail="请先登录后再写入感知记忆")
+    ms = getattr(request.app.state, "agent_memory_service", None)
+    if ms is None:
+        raise HTTPException(status_code=503, detail="多层记忆服务未初始化")
+    await ms.record_perceptual(
+        body.session_id,
+        modality=body.modality,
+        ref=body.ref,
+        summary=body.summary or body.ref[:200],
+    )
+    return {"ok": True}
 
 
 # ------------------------------------------------------------------

@@ -1,4 +1,5 @@
 fastapi>=0.104.0
+python-multipart>=0.0.9
 uvicorn[standard]>=0.27.0
 gunicorn>=21.0.0
 
@@ -12,6 +13,10 @@ python-jose[cryptography]>=3.3.0
 bcrypt>=4.0.0
 
 paho-mqtt>=1.6.0
+
+# Agent：LangGraph 编排（LLM ⟷ 工具循环）
+langgraph>=0.2.55
+langchain-core>=0.3.30
 
 # ML - 温度预测推理
 torch>=2.0.0

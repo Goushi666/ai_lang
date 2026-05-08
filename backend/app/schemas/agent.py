@@ -33,7 +33,10 @@ class ClarificationPayload(BaseModel):
 class ChatRequest(BaseModel):
     session_id: Optional[str] = None
     messages: List[ChatMessage] = Field(default_factory=list)
-    mode: str = Field("general", description="对话模式：general | rag | vehicle")
+    mode: str = Field(
+        "general",
+        description="对话模式：general | rag | vehicle | industrial（工业/遥控启用安全审计+反思）",
+    )
     stream: bool = Field(False, description="是否启用 SSE 流式输出")
 
 
@@ -65,6 +68,14 @@ class ChatResponse(BaseModel):
     exports: List[ExportDownloadItem] = Field(
         default_factory=list,
         description="本轮非流式对话中 CSV 导出成功后的下载项",
+    )
+    industrial_audit: Optional[Dict[str, Any]] = Field(
+        None,
+        description="工业/遥控模式下的安全审计结果（decision / risk_tier / rationale 等）",
+    )
+    industrial_reflection: Optional[Dict[str, Any]] = Field(
+        None,
+        description="工业/遥控模式下的反思结果（verdict / issues / revised_summary 等）",
     )
 
 
@@ -120,3 +131,12 @@ class KnowledgeStatusResponse(BaseModel):
     status: str = "not_initialized"
     collection: Optional[str] = None
     db_path: Optional[str] = None
+
+
+class PerceptualMemoryIngestRequest(BaseModel):
+    """向感知记忆追加一条多模态引用（须与 Agent 会话 id 对齐）。"""
+
+    session_id: str = Field(..., min_length=8, max_length=64)
+    modality: str = Field("image", description="image | video | audio | telemetry | other")
+    ref: str = Field(..., description="资源标识或 URL，由上游约定")
+    summary: str = Field("", description="给模型的短摘要（中文）")

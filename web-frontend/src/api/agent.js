@@ -20,12 +20,18 @@ const jsonHeaders = {
  */
 export async function agentChatStream(body, onEvent, signal) {
   const url = `${import.meta.env.VITE_API_BASE_URL || ""}/api/agent/chat/stream`;
+  const token =
+    typeof localStorage !== "undefined" ? localStorage.getItem("token") : null;
+  const headers = {
+    ...jsonHeaders,
+    Accept: "text/event-stream",
+  };
+  if (token) {
+    headers.Authorization = `Bearer ${token}`;
+  }
   const res = await fetch(url, {
     method: "POST",
-    headers: {
-      ...jsonHeaders,
-      Accept: "text/event-stream",
-    },
+    headers,
     body: JSON.stringify(body),
     signal,
   });

@@ -128,9 +128,33 @@ class Settings(BaseSettings):
     AGENT_CSV_EXPORT_MAX_ROWS: int = Field(default=50_000, ge=1, le=500_000)
     # get_current_time 工具展示的本地时区（IANA），如 Asia/Shanghai
     AGENT_TIME_DISPLAY_TZ: str = "Asia/Shanghai"
+    # 工业/vehicle：分级安全审计 — 仅控制/导出/未知工具走审计 LLM；纯只读工具直过（加速）
+    AGENT_INDUSTRIAL_AUDIT_TIERED: bool = True
+    # 同一轮多个 tool_call 是否并行执行（结果仍按调用顺序写回 messages）
+    AGENT_TOOLS_PARALLEL: bool = True
+    # 工业/vehicle：反思 LLM；关闭可显著加速
+    AGENT_INDUSTRIAL_REFLECTION_ENABLED: bool = True
+    # conditional：无回复 / 达工具上限 / 本 user 轮内已执行过工具 时反思；always / off
+    AGENT_INDUSTRIAL_REFLECTION_MODE: str = Field(
+        default="conditional",
+        description="industrial/vehicle 反思：conditional | always | off",
+    )
+    # conditional 下是否对「纯文本、本轮未跑工具」也做反思（更慢、更稳）
+    AGENT_INDUSTRIAL_REFLECTION_ON_TEXT_ONLY: bool = False
+    # 多层记忆（工作 / 情景 / 语义 / 感知）
+    AGENT_MEMORY_LAYERS_ENABLED: bool = True
+    AGENT_MEMORY_WORKING_TTL_SEC: float = Field(default=600.0, ge=60.0, le=86400.0)
+    AGENT_MEMORY_SEMANTIC_IN_GENERAL: bool = Field(
+        default=True,
+        description="非 rag 模式下将知识库轻量命中注入 system（语义记忆）",
+    )
+    AGENT_MEMORY_SEMANTIC_TOP_K: int = Field(default=3, ge=1, le=8)
+    AGENT_MEMORY_INJECT_MAX_CHARS: int = Field(default=6000, ge=500, le=32000)
     VECTOR_DB_PATH: str = "./data/vector_db"
     # 知识库（SQLite FTS5）文件路径；与旧 Chroma 目录 VECTOR_DB_PATH 无关
     KNOWLEDGE_SQLITE_PATH: str = "./data/knowledge_fts.db"
+    # 可导入 Markdown 的目录（相对 backend 根）；设置页上传写入此目录
+    KNOWLEDGE_DOCS_DIR: str = "knowledge_docs"
     EMBEDDING_MODEL: str = "BAAI/bge-large-zh-v1.5"
     EMBEDDING_BATCH_SIZE: int = 16
     RAG_CHUNK_SIZE: int = 500

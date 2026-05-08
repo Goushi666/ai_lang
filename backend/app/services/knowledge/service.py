@@ -7,7 +7,7 @@ import re
 import sqlite3
 import threading
 from pathlib import Path
-from typing import Dict, List, Optional
+from typing import Any, Dict, List, Optional
 
 from app.core.config import Settings
 
@@ -21,6 +21,15 @@ _BACKEND_ROOT = Path(__file__).resolve().parents[3]
 def _safe_source_id(name: str) -> str:
     s = re.sub(r"[^\w.\-]+", "_", (name or "").strip())[:120]
     return s or "document"
+
+
+def knowledge_docs_path(settings: Settings) -> Path:
+    """Markdown 文档目录（与设置页导入一致），不存在则创建。"""
+    p = Path(getattr(settings, "KNOWLEDGE_DOCS_DIR", "knowledge_docs"))
+    if not p.is_absolute():
+        p = (_BACKEND_ROOT / p).resolve()
+    p.mkdir(parents=True, exist_ok=True)
+    return p
 
 
 def _sqlite_db_path(settings: Settings) -> Path:
@@ -102,6 +111,11 @@ class KnowledgeService:
         with self._lock:
             self._conn.executescript("DROP TABLE IF EXISTS knowledge_chunks;")
             self._init_schema()
+
+    @staticmethod
+    def rag_source_id_for_filename(filename: str) -> str:
+        """与 ingest_file 写入 FTS 的 source 列一致（供管理端删除）。"""
+        return _safe_source_id(filename)
 
     def delete_by_source(self, source: str) -> int:
         with self._lock:
