@@ -11,10 +11,13 @@
       </el-icon>
     </div>
     <transition name="embodied-fade">
-      <div v-if="expanded" class="embodied-panel">
-        <div class="embodied-header">
+      <div v-if="expanded" class="embodied-panel" :style="panelStyle">
+        <div
+          class="embodied-header embodied-header--drag"
+          @pointerdown="onPanelHeaderPointerDown"
+        >
           <span class="embodied-title">AI Control</span>
-          <div class="embodied-header-actions">
+          <div class="embodied-header-actions" @pointerdown.stop>
             <button class="embodied-clear-btn" @click="clearMessages">
               <el-icon :size="14">
                 <Delete />
@@ -120,12 +123,114 @@
 </template>
 
 <script setup>
-import { ref, nextTick, onUnmounted, triggerRef } from "vue";
+import { ref, computed, watch, nextTick, onUnmounted, triggerRef } from "vue";
 import { Monitor, Delete, Close, Promotion } from "@element-plus/icons-vue";
 import { renderMarkdown } from "@/utils/markdown";
 import { agentChatStream } from "@/api/agent";
 
+const PANEL_W = 380;
+const PANEL_H = 520;
+const PANEL_MARGIN = 24;
+
 const expanded = ref(false);
+/** 展开面板位置（px）；null 表示尚未初始化，由 watch(expanded) 写入 */
+const panelLeft = ref(null);
+const panelTop = ref(null);
+
+const panelStyle = computed(function () {
+  if (!expanded.value || panelLeft.value === null || panelTop.value === null) {
+    return {};
+  }
+  return {
+    left: panelLeft.value + "px",
+    top: panelTop.value + "px",
+    right: "auto",
+    bottom: "auto",
+  };
+});
+
+function initPanelPosition() {
+  if (ballX.value !== null && ballY.value !== null) {
+    var left = ballX.value + 48 - PANEL_W;
+    var top = ballY.value - PANEL_H - 8;
+    panelLeft.value = Math.max(
+      0,
+      Math.min(window.innerWidth - PANEL_W, left)
+    );
+    panelTop.value = Math.max(
+      0,
+      Math.min(window.innerHeight - PANEL_H, top)
+    );
+  } else {
+    panelLeft.value = window.innerWidth - PANEL_W - PANEL_MARGIN;
+    panelTop.value = window.innerHeight - PANEL_H - PANEL_MARGIN;
+  }
+}
+
+watch(expanded, function (v) {
+  if (v && (panelLeft.value === null || panelTop.value === null)) {
+    initPanelPosition();
+  }
+});
+
+var panelDragging = false;
+var panelDragStartX = 0;
+var panelDragStartY = 0;
+var panelStartLeft = 0;
+var panelStartTop = 0;
+/** setPointerCapture 所在元素，用于 pointerup 时 release */
+var panelCaptureEl = null;
+var panelCaptureId = null;
+
+function onPanelPointerMove(e) {
+  if (!panelDragging) return;
+  var dx = e.clientX - panelDragStartX;
+  var dy = e.clientY - panelDragStartY;
+  var nl = panelStartLeft + dx;
+  var nt = panelStartTop + dy;
+  panelLeft.value = Math.max(
+    0,
+    Math.min(window.innerWidth - PANEL_W, nl)
+  );
+  panelTop.value = Math.max(
+    0,
+    Math.min(window.innerHeight - PANEL_H, nt)
+  );
+}
+
+function onPanelPointerUp(e) {
+  if (!panelDragging) return;
+  panelDragging = false;
+  window.removeEventListener("pointermove", onPanelPointerMove);
+  window.removeEventListener("pointerup", onPanelPointerUp);
+  if (panelCaptureEl && panelCaptureId != null) {
+    try {
+      panelCaptureEl.releasePointerCapture(panelCaptureId);
+    } catch (_) {
+      /* ignore */
+    }
+  }
+  panelCaptureEl = null;
+  panelCaptureId = null;
+}
+
+function onPanelHeaderPointerDown(e) {
+  if (e.button !== undefined && e.button !== 0) return;
+  if (!expanded.value) return;
+  if (panelLeft.value === null || panelTop.value === null) {
+    initPanelPosition();
+  }
+  panelDragging = true;
+  panelDragStartX = e.clientX;
+  panelDragStartY = e.clientY;
+  panelStartLeft = panelLeft.value;
+  panelStartTop = panelTop.value;
+  panelCaptureEl = e.currentTarget;
+  panelCaptureId = e.pointerId;
+  panelCaptureEl.setPointerCapture(e.pointerId);
+  window.addEventListener("pointermove", onPanelPointerMove);
+  window.addEventListener("pointerup", onPanelPointerUp);
+}
 const inputText = ref("");
 const sending = ref(false);
 const msgListRef = ref(null);
@@ -331,6 +436,8 @@ function onBallPointerUp(e) {
 
 onUnmounted(function () {
   if (abortCtrl) abortCtrl.abort();
+  window.removeEventListener("pointermove", onPanelPointerMove);
+  window.removeEventListener("pointerup", onPanelPointerUp);
 });
 </script>
 <!-- STYLE_PLACEHOLDER -->
@@ -388,6 +495,14 @@ onUnmounted(function () {
   padding: var(--ds-space-3) var(--ds-space-3);
   background: linear-gradient(135deg, var(--ds-primary) 0%, var(--ds-primary-active) 100%);
   color: #fff;
+}
+.embodied-header--drag {
+  cursor: grab;
+  touch-action: none;
+  user-select: none;
+}
+.embodied-header--drag:active {
+  cursor: grabbing;
 }
 .embodied-title {
   font-family: var(--ds-font-display);

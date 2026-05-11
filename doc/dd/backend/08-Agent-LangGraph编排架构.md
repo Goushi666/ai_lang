@@ -18,8 +18,10 @@ app/services/agent/
 ├── graph/
 │   ├── build.py            # StateGraph 编译：边与条件路由
 │   ├── state.py            # AgentGraphState（TypedDict）
-│   ├── nodes.py            # 各节点：ingest / clarify / build_system / llm / tools / finalize*
+│   ├── nodes.py            # 各节点：ingest / clarify / build_system / llm / tools / audit / reflect / finalize*
 │   ├── deps.py             # AgentGraphDeps（注入 AgentService）
+│   ├── safety.py           # 工业审计 / 反思：提示词与结果规范化
+│   ├── tool_tier.py        # 工具分级（只读跳过审计等）
 │   ├── streamutil.py       # configurable.sse_stream 判断
 │   └── tool_export.py      # 导出类工具的下载链接解析
 ├── llm/                    # LLMClient（OpenAI 兼容 HTTP）
@@ -100,4 +102,8 @@ flowchart TD
 - 为图接入 **checkpointer**，支持跨请求恢复与可观测 trace。  
 - 将 **Skill** 拆为子图节点，与 Tool 层并列。  
 - 使用 `astream_events` 统一产出面向可观测平台的 span（需评估与自定义 `delta` 的映射成本）。  
-- **工业场景**：在独立 `mode` 或路由下增加 **安全审计 Agent** 节点与 **反思（Reflection）** 节点（或子图），与执行链共用 SSE/状态字段扩展；见 [09-工业Agent-安全审计与反思.md](./09-工业Agent-安全审计与反思.md)。
+- **工业场景（已实现）**：`ChatRequest.mode` 为 **`industrial` 或 `vehicle`** 时，在 `llm` 与 `tools` 之间插入 **`audit`**，在收尾前插入 **`reflect`**（详见 [09-工业Agent-安全审计与反思.md](./09-工业Agent-安全审计与反思.md) §8）；本节 §3 状态图已反映该路由。
+
+---
+
+**修订**：2026-05-07 目录补充 `safety.py`、`tool_tier.py`；§7 标明工业节点已落地。

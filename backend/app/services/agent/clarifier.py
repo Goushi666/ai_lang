@@ -1,4 +1,4 @@
-"""意图澄清：由大模型评估问题清晰度，低于阈值则再次调用模型生成追问与快捷选项。"""
+"""意图澄清：由大模型评估问题清晰度，不足时生成追问与快捷选项。"""
 
 from __future__ import annotations
 
@@ -8,6 +8,8 @@ import logging
 import re
 from dataclasses import dataclass, field
 from typing import Any, Dict, List, Optional
+
+from app.core.config import settings
 
 from .llm.client import LLMClient
 
@@ -67,9 +69,11 @@ def _clamp01(x: Any) -> float:
 
 class Clarifier:
     """
-    使用主链路同一 LLMClient：
-    1) 判别清晰度 clarity_score ∈ [0,1]；
-    2) 若低于 min_clarity，再调用一次模型生成追问句与若干选项。
+    由 ``settings.AGENT_CLARIFICATION_ENABLED`` 总开关控制；关闭时 ``check`` 立即返回且不耗时。
+
+    开启后可选「极短问句先走本地模板」避免 LLM；否则使用主链路 LLMClient：
+    - one-shot（默认）：单次 JSON 含 clarity_score；不足 min_clarity 时同条带 question/options。
+    - 两阶段（可关 one-shot）：先判别分数，再单独生成追问。
     未配置 LLM 或调用失败时放行（不澄清），避免阻断对话。
     """
 
@@ -105,22 +109,193 @@ class Clarifier:
         if _SMALL_TALK.match(text):
             return None
 
+        raw_modes = (getattr(settings, "AGENT_CLARIFICATION_SKIP_MODES", "") or "").strip()
+        if raw_modes:
+            skip_set = {m.strip().lower() for m in raw_modes.split(",") if m.strip()}
+            if (session_mode or "").strip().lower() in skip_set:
+                return None
+
+        skip_min = int(getattr(settings, "AGENT_CLARIFICATION_SKIP_MIN_USER_CHARS", 0) or 0)
+        if skip_min > 0 and len(text) >= skip_min:
+            return None
+
+        hf = int(getattr(settings, "AGENT_CLARIFICATION_HEURISTIC_FIRST_MAX_CHARS", 0) or 0)
+        if hf > 0 and len(text) <= hf:
+            early = self._heuristic_vague_clarification(text, session_mode, len_limit=hf)
+            if early is not None:
+                return early
+
         if self._llm is None or not self._llm.is_configured:
             return None
 
+        if bool(getattr(settings, "AGENT_CLARIFICATION_ONE_SHOT", True)):
+            kind, cq = await self._check_one_shot(text, session_mode)
+            if kind == "pass":
+                return None
+            if kind == "clarify":
+                return cq
+            heur = self._heuristic_vague_clarification(text, session_mode)
+            if heur is not None:
+                return heur
+            # one-shot 已超时：不再串联两阶段（易二次超时导致长时间无响应）
+            if kind == "timeout":
+                logger.warning(
+                    "clarifier: one-shot timed out, no heuristic match, pass through to main agent"
+                )
+                return None
+            return await self._check_two_phase(text, session_mode)
+
+        return await self._check_two_phase(text, session_mode)
+
+    def _mode_label(self, session_mode: str) -> str:
+        m = (session_mode or "").strip().lower()
+        if m == "rag":
+            return "知识问答（可结合知识库）"
+        if m == "industrial":
+            return "工业巡检对话"
+        return "通用对话"
+
+    def _question_from_payload(
+        self,
+        data: Dict[str, Any],
+    ) -> Optional[ClarificationQuestion]:
+        question = (data.get("question") or "").strip()
+        raw_opts = data.get("options")
+        options: List[ClarificationOption] = []
+        if isinstance(raw_opts, list):
+            for item in raw_opts:
+                if not isinstance(item, dict):
+                    continue
+                lab = str(item.get("label") or "").strip()
+                val = str(item.get("value") or "").strip()
+                if not lab:
+                    continue
+                if not val:
+                    val = lab
+                options.append(ClarificationOption(label=lab[:40], value=val[:500]))
+        max_o = self._max_options
+        if not question or len(options) < 2:
+            return None
+        return ClarificationQuestion(question=question, options=options[:max_o], allow_custom=True)
+
+    def _heuristic_vague_clarification(
+        self,
+        text: str,
+        session_mode: str,
+        len_limit: Optional[int] = None,
+    ) -> Optional[ClarificationQuestion]:
+        """
+        极短、笼统问句的本地追问模板。
+        - ``len_limit`` 有值时用其作为字数上限（启发式优先路径）；
+        - 否则用 ``AGENT_CLARIFICATION_HEURISTIC_MAX_CHARS``（LLM 失败后的兜底）。
+        """
+        if len_limit is not None:
+            max_c = int(len_limit)
+        else:
+            max_c = int(getattr(settings, "AGENT_CLARIFICATION_HEURISTIC_MAX_CHARS", 0) or 0)
+        if max_c <= 0:
+            return None
+        if len(text) > max_c:
+            return None
+        m = (session_mode or "").strip().lower()
+        if m in ("rag", "vehicle"):
+            return None
+        return ClarificationQuestion(
+            question=(
+                "您的问题还比较笼统。请先选一下想了解的方向，或在下方用一句话补充"
+                "（例如时间范围、具体指标或设备）。"
+            ),
+            options=[
+                ClarificationOption(
+                    label="实时环境监测",
+                    value="请帮我查询当前各传感器最新读数，并说明是否接近告警阈值。",
+                ),
+                ClarificationOption(
+                    label="最近告警",
+                    value="请汇总最近24小时内的环境相关告警记录。",
+                ),
+                ClarificationOption(
+                    label="历史或分析",
+                    value="我想查看一段时间内的环境数据趋势或环境分析结论。",
+                ),
+                ClarificationOption(
+                    label="功能与用法",
+                    value="请介绍平台和环境监测相关功能该怎么用，不需要拉实时数值。",
+                ),
+            ],
+            allow_custom=True,
+        )
+
+    async def _check_one_shot(
+        self,
+        text: str,
+        session_mode: str,
+    ) -> tuple[str, Optional[ClarificationQuestion]]:
+        """
+        Returns:
+            ("pass", None) — 足够清晰，无需澄清
+            ("clarify", ClarificationQuestion) — 需追问
+            ("timeout", None) — one-shot 超时（勿再串联慢路径）
+            ("fallback", None) — 解析/其它失败，可尝试两阶段兜底
+        """
+        llm = self._llm
+        if llm is None:
+            return ("fallback", None)
+        mode_label = self._mode_label(session_mode)
+        mc = self._min_clarity
+        max_o = self._max_options
+        timeout = float(getattr(settings, "AGENT_CLARIFICATION_ONE_SHOT_TIMEOUT_SEC", 10.0) or 10.0)
+        timeout = max(2.0, min(120.0, timeout))
+        shot_max = int(getattr(settings, "AGENT_CLARIFICATION_ONE_SHOT_MAX_TOKENS", 280) or 280)
+        shot_max = max(64, min(1024, shot_max))
+
+        system = (
+            "判别用户问题清晰度并输出 JSON（无 markdown）。\n"
+            "字段：clarity_score(0～1)；question(字符串)；options(数组，项为{label,value})。\n"
+            f"若 clarity_score≥{mc}：question、options 为 null。\n"
+            f"若 clarity_score<{mc}：必填简短中文追问与 {2}～{max_o} 个选项；label≤16字。\n"
+            "短主题词无范围（如仅「环境」「告警」）须低分并追问。"
+        )
+        user = f"会话模式：{mode_label}\n\n用户问题：\n{text[:2000]}"
+        messages: List[Dict[str, str]] = [
+            {"role": "system", "content": system},
+            {"role": "user", "content": user},
+        ]
+        try:
+            data = await asyncio.wait_for(
+                llm.chat_completion_json(messages, max_tokens=shot_max, temperature=0.1),
+                timeout=timeout,
+            )
+        except asyncio.TimeoutError:
+            logger.warning("clarifier one-shot timed out")
+            return ("timeout", None)
+        except Exception as exc:
+            logger.warning("clarifier one-shot failed: %s", exc)
+            return ("fallback", None)
+
+        if not data:
+            return ("fallback", None)
+
+        clarity = _clamp01(data.get("clarity_score"))
+        if clarity >= self._min_clarity:
+            return ("pass", None)
+
+        qn = self._question_from_payload(data)
+        if qn is None:
+            return ("fallback", None)
+        return ("clarify", qn)
+
+    async def _check_two_phase(
+        self,
+        text: str,
+        session_mode: str,
+    ) -> Optional[ClarificationQuestion]:
         clarity = await self._llm_clarity_score(text, session_mode)
         if clarity is None:
             return None
-
         if clarity >= self._min_clarity:
             return None
-
         return await self._llm_clarification_payload(text, session_mode)
-
-    def _mode_label(self, session_mode: str) -> str:
-        if session_mode == "rag":
-            return "知识问答（可结合知识库）"
-        return "通用对话"
 
     async def _llm_clarity_score(self, text: str, session_mode: str) -> Optional[float]:
         llm = self._llm
@@ -156,11 +331,11 @@ class Clarifier:
             return None
 
         raw = (resp.content or "").strip()
-        data = _extract_json_object(raw)
-        if not data:
+        parsed = _extract_json_object(raw)
+        if not parsed:
             logger.warning("clarifier clarity judge unparsable: %s", raw[:200])
             return None
-        return _clamp01(data.get("clarity_score"))
+        return _clamp01(parsed.get("clarity_score"))
 
     async def _llm_clarification_payload(
         self,
@@ -207,24 +382,4 @@ class Clarifier:
         data = _extract_json_object((resp.content or "").strip())
         if not data:
             return None
-
-        question = (data.get("question") or "").strip()
-        raw_opts = data.get("options")
-        options: List[ClarificationOption] = []
-        if isinstance(raw_opts, list):
-            for item in raw_opts:
-                if not isinstance(item, dict):
-                    continue
-                lab = str(item.get("label") or "").strip()
-                val = str(item.get("value") or "").strip()
-                if not lab:
-                    continue
-                if not val:
-                    val = lab
-                options.append(ClarificationOption(label=lab[:40], value=val[:500]))
-
-        if not question or len(options) < 2:
-            return None
-
-        options = options[:max_o]
-        return ClarificationQuestion(question=question, options=options, allow_custom=True)
+        return self._question_from_payload(data)

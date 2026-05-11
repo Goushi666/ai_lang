@@ -40,6 +40,15 @@ class ToolRegistry:
         """返回所有工具的 OpenAI function-calling 声明。"""
         return [t.declaration() for t in self._tools.values()]
 
+    def list_declarations_for_names(self, names: List[str]) -> List[Dict[str, Any]]:
+        """按给定名称顺序生成声明（跳过未注册名）；用于按模式裁剪工具以加速首包。"""
+        out: List[Dict[str, Any]] = []
+        for n in names:
+            t = self._tools.get(n)
+            if t is not None:
+                out.append(t.declaration())
+        return out
+
     async def execute(self, name: str, **kwargs: Any) -> ToolResult:
         tool = self._tools.get(name)
         if tool is None:

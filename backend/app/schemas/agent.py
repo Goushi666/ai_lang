@@ -38,6 +38,10 @@ class ChatRequest(BaseModel):
         description="对话模式：general | rag | vehicle | industrial（工业/遥控启用安全审计+反思）",
     )
     stream: bool = Field(False, description="是否启用 SSE 流式输出")
+    clarification_enabled: Optional[bool] = Field(
+        None,
+        description="用户侧意图澄清：None=默认开启（在服务器 AGENT_CLARIFICATION_ENABLED 允许时）；False=本请求跳过澄清器",
+    )
 
 
 class ExportDownloadItem(BaseModel):

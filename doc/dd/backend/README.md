@@ -8,14 +8,16 @@
 |------|------|
 | [00-系统架构与技术选型.md](./00-系统架构与技术选型.md) | 分层架构、技术栈 |
 | [01-目录结构.md](./01-目录结构.md) | `backend/` 包与文件组织 |
-| [02-数据模型.md](./02-数据模型.md) | ORM 表结构（目标/示例） |
+| [02-数据模型.md](./02-数据模型.md) | ORM 表结构（与当前 SQLite 语义对齐） |
 | [03-API路由-传感器.md](./03-API路由-传感器.md) | 传感器 REST |
 | [04-API路由-告警.md](./04-API路由-告警.md) | 告警 REST |
 | [05-API路由-车辆与设备.md](./05-API路由-车辆与设备.md) | 车辆与设备 REST |
 | [06-环境分析模块.md](./06-环境分析模块.md) | AnalysisService、聚合与摘要 API |
-| [07-Agent模块.md](./07-Agent模块.md) | LLM 编排、工具、会话、RAG、与 PRD 对齐及演进方案 |
+| [07-Agent模块.md](./07-Agent模块.md) | LLM 编排、工具、会话、FTS 知识库、与 PRD 对齐及演进方案 |
 | [08-Agent-LangGraph编排架构.md](./08-Agent-LangGraph编排架构.md) | Agent 单图编排：节点/边、JSON 与 SSE 共用 LangGraph |
 | [09-工业Agent-安全审计与反思.md](./09-工业Agent-安全审计与反思.md) | 工业链路：安全审计 Agent、反思机制、与 LangGraph/API 衔接 |
 | [10-Agent多层记忆架构.md](./10-Agent多层记忆架构.md) | 工作/情景/语义/感知四层记忆与注入点 |
+
+**其它路由（尚未单独成篇）**：**`/api/auth`**（`auth.py`）JWT 与用户级别；**`/api/admin`**（`admin.py`）业务表清空、`knowledge_docs` 上传与 FTS 导入/清空等（仅 **`admin`**）。
 
 **后端需求**见 [`../../prd/backend/`](../../prd/backend/README.md)。**硬件设计**仍以 [`../硬件端设计文档.md`](../硬件端设计文档.md) 为准。

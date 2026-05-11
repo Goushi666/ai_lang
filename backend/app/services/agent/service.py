@@ -328,6 +328,7 @@ class AgentService:
         mode: str = "general",
         stream: bool = False,
         user_level: str = "guest",
+        clarification_user_enabled: Optional[bool] = None,
     ) -> ChatResponse:
         """
         处理一次用户对话请求（非流式）。
@@ -344,6 +345,7 @@ class AgentService:
                 "mode": mode,
                 "user_level": user_level,
                 "max_tool_rounds": self._max_tool_rounds,
+                "clarification_user_enabled": clarification_user_enabled,
             }
         )
         clarification = result.get("clarification")
@@ -371,6 +373,7 @@ class AgentService:
         session_id: Optional[str] = None,
         mode: str = "general",
         user_level: str = "guest",
+        clarification_user_enabled: Optional[bool] = None,
     ) -> AsyncIterator[Dict[str, Any]]:
         """
         供 SSE 使用：与 ``chat()`` 共用同一张 LangGraph。
@@ -385,6 +388,7 @@ class AgentService:
             "mode": mode,
             "user_level": user_level,
             "max_tool_rounds": self._max_tool_rounds,
+            "clarification_user_enabled": clarification_user_enabled,
         }
         graph_config: Dict[str, Any] = {"configurable": {"sse_stream": True}}
 

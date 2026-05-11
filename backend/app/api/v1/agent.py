@@ -99,6 +99,7 @@ async def agent_health(request: Request):
             settings, "AGENT_INDUSTRIAL_REFLECTION_MODE", "conditional"
         ),
         "memory_layers_enabled": getattr(settings, "AGENT_MEMORY_LAYERS_ENABLED", True),
+        "clarification_enabled": getattr(settings, "AGENT_CLARIFICATION_ENABLED", False),
     }
 
 
@@ -119,6 +120,7 @@ async def agent_chat(
         mode=body.mode,
         stream=body.stream,
         user_level=user_level,
+        clarification_user_enabled=body.clarification_enabled,
     )
 
 
@@ -139,6 +141,7 @@ async def agent_chat_stream(
             session_id=body.session_id,
             mode=body.mode,
             user_level=user_level,
+            clarification_user_enabled=body.clarification_enabled,
         ):
             yield f"data: {json.dumps(ev, ensure_ascii=False)}\n\n"
 

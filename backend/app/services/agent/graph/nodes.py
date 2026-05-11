@@ -13,6 +13,7 @@ from langgraph.config import get_stream_writer
 from app.core.config import settings
 from app.schemas.agent import ChatMessage, ClarificationOption, ClarificationPayload
 from app.services.agent.context.session import Message
+from app.services.agent.mode_tools import vehicle_tool_names_for_llm
 
 from .deps import AgentGraphDeps
 from .safety import (
@@ -84,6 +85,10 @@ async def node_clarify(
 ) -> Dict[str, Any]:
     del config
     if "last_user" not in state:
+        return {"needs_clarification": False}
+    if not settings.AGENT_CLARIFICATION_ENABLED:
+        return {"needs_clarification": False}
+    if state.get("clarification_user_enabled") is False:
         return {"needs_clarification": False}
     cq = await deps.service._clarifier.check(state["last_user"], session_mode=state["mode"])
     if cq is None:
@@ -161,25 +166,51 @@ async def node_build_system(
 
     assert "last_user" in state, "agent graph: last_user missing before build_system"
     session = state["session"]
-    system_prompt = get_system_prompt(
+    reg_tools = deps.service._tools.list_names()
+    mode_l = (session.mode or "").strip().lower()
+    vehicle_ordered: Optional[List[str]] = None
+    if mode_l == "vehicle" and bool(
+        getattr(settings, "AGENT_VEHICLE_LLM_TOOLS_MINIMAL", True)
+    ):
+        vo = vehicle_tool_names_for_llm(reg_tools)
+        if vo:
+            vehicle_ordered = vo
+    names_for_llm = vehicle_ordered if vehicle_ordered else reg_tools
+    base_prompt = get_system_prompt(
         mode=session.mode,
-        tool_names=deps.service._tools.list_names() or None,
+        tool_names=names_for_llm or None,
         user_level=state["user_level"],
     )
-    system_prompt = await deps.service._append_rag_retrieval(
-        mode=session.mode,
-        last_user=state["last_user"],
-        system_prompt=system_prompt,
+
+    async def _memory_appendix_only() -> str:
+        mem = deps.service._memory_service
+        if mem is None:
+            return ""
+        try:
+            return await mem.build_system_appendix(
+                conversation_id=session.id,
+                last_user=state["last_user"],
+                mode=session.mode,
+            )
+        except Exception as exc:
+            logger.warning("多层记忆注入失败: %s", exc)
+            return ""
+
+    rag_extended, mem_appendix = await asyncio.gather(
+        deps.service._append_rag_retrieval(
+            mode=session.mode,
+            last_user=state["last_user"],
+            system_prompt=base_prompt,
+        ),
+        _memory_appendix_only(),
     )
-    system_prompt = await deps.service._append_memory_context(
-        session_id=session.id,
-        mode=session.mode,
-        last_user=state["last_user"],
-        system_prompt=system_prompt,
-    )
+    system_prompt = rag_extended + (("\n\n" + mem_appendix) if mem_appendix else "")
     llm_messages: List[Dict[str, Any]] = [{"role": "system", "content": system_prompt}]
     llm_messages.extend(session.to_llm_messages())
-    tool_declarations = deps.service._tools.list_declarations() or None
+    if vehicle_ordered:
+        tool_declarations = deps.service._tools.list_declarations_for_names(vehicle_ordered) or None
+    else:
+        tool_declarations = deps.service._tools.list_declarations() or None
     return {
         "system_prompt": system_prompt,
         "llm_messages": llm_messages,

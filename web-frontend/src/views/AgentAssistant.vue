@@ -3,11 +3,28 @@
     <header class="agent-page-header">
       <div class="agent-header-row">
         <h2 class="page-title">智能助手</h2>
-        <el-radio-group v-model="chatMode" size="small" class="mode-switch" :disabled="sending">
-          <el-radio-button value="general">通用对话</el-radio-button>
-          <el-radio-button value="rag">知识问答</el-radio-button>
-          <el-radio-button value="industrial">工业巡检</el-radio-button>
-        </el-radio-group>
+        <div class="agent-header-actions">
+          <el-radio-group v-model="chatMode" size="small" class="mode-switch" :disabled="sending">
+            <el-radio-button value="general">通用对话</el-radio-button>
+            <el-radio-button value="rag">知识问答</el-radio-button>
+            <el-radio-button value="industrial">工业巡检</el-radio-button>
+          </el-radio-group>
+          <div
+            class="clarify-switch-row"
+            :title="
+              health?.clarification_enabled
+                ? '开启后，模糊问题会先追问或给出快捷选项（略增首包时间）'
+                : '管理员已在服务端关闭澄清器，无法开启'
+            "
+          >
+            <span class="clarify-switch-label">意图澄清</span>
+            <el-switch
+              v-model="clarifyEnabled"
+              size="small"
+              :disabled="!health?.clarification_enabled || sending"
+            />
+          </div>
+        </div>
       </div>
       <p v-if="health?.message" class="page-sub">{{ health.message }}</p>
     </header>
@@ -186,6 +203,7 @@ function mergeStreamedField(accumulated, doneVal) {
 }
 
 const STORAGE_KEY = "ai_lang_agent_conversations_v1";
+const CLARIFY_USER_KEY = "ai_lang_agent_clarification_user_v1";
 
 const DEFAULT_GREETING =
   "你好，我是井场智能助手。你可以问我环境数据、告警记录、异常分析等问题。";
@@ -239,6 +257,26 @@ const sending = ref(false);
 const listRef = ref(null);
 const composerInputRef = ref(null);
 const clarificationOptions = ref([]);
+/** 用户侧是否启用意图澄清（与服务器 AGENT_CLARIFICATION_ENABLED 同时满足才生效） */
+const clarifyEnabled = ref(true);
+
+function initClarifyUserPref() {
+  try {
+    const v = localStorage.getItem(CLARIFY_USER_KEY);
+    if (v === "0") clarifyEnabled.value = false;
+    else if (v === "1") clarifyEnabled.value = true;
+  } catch {
+    /* ignore */
+  }
+}
+
+watch(clarifyEnabled, () => {
+  try {
+    localStorage.setItem(CLARIFY_USER_KEY, clarifyEnabled.value ? "1" : "0");
+  } catch {
+    /* quota */
+  }
+});
 
 function focusComposerInput() {
   nextTick(() => {
@@ -552,6 +590,7 @@ async function send() {
           messages: toApiMessages(),
           mode: chatMode.value,
           session_id: c.backendSessionId || undefined,
+          clarification_enabled: clarifyEnabled.value,
         },
         (ev) => {
         if (ev.type === "export_ready") {
@@ -618,6 +657,7 @@ async function send() {
         messages: toApiMessages(),
         mode: chatMode.value,
         session_id: c.backendSessionId || undefined,
+        clarification_enabled: clarifyEnabled.value,
       });
       if (res.session_id) applyServerSessionId(c, res.session_id);
       asst.content = res.content || "";
@@ -666,6 +706,7 @@ async function send() {
 }
 
 onMounted(async () => {
+  initClarifyUserPref();
   await loadHealth();
   await initFromServer();
 });
@@ -698,6 +739,26 @@ onMounted(async () => {
   justify-content: space-between;
   gap: var(--ds-space-3);
   flex-wrap: wrap;
+}
+
+.agent-header-actions {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: var(--ds-space-3);
+}
+
+.clarify-switch-row {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--ds-space-2);
+  flex-shrink: 0;
+}
+
+.clarify-switch-label {
+  font-size: 13px;
+  color: var(--el-text-color-regular);
+  white-space: nowrap;
 }
 .page-title {
   margin: 0;

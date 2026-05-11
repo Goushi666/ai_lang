@@ -20,6 +20,8 @@ class AgentGraphState(TypedDict):
     mode: str
     user_level: str
     max_tool_rounds: int
+    # None：按用户默认（等同开启）；False：本请求不跑澄清器（需服务器总开关已开启才有意义）
+    clarification_user_enabled: NotRequired[Optional[bool]]
 
     # --- ingest / clarify ---
     last_user: NotRequired[str]

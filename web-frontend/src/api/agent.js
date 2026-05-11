@@ -3,8 +3,8 @@ import { nextTick } from "vue";
 import { agentStreamDbg } from "@/utils/agentStreamDebug";
 
 /**
- * 同一 TCP 块里可能含大量 SSE 行；若同步连续 onEvent，Vue 会合并成一次渲染。
- * 每个事件后 await nextTick()，让界面按事件粒度刷新（流式可见）。
+ * SSE 解析：非 delta 事件后 await nextTick 保证 clarification/done 等及时落屏；
+ * delta 用 requestAnimationFrame 合并为每帧最多一次刷新，减轻逐 token 卡顿。
  */
 
 const jsonHeaders = {
@@ -19,6 +19,15 @@ const jsonHeaders = {
  * @param {AbortSignal} [signal]
  */
 export async function agentChatStream(body, onEvent, signal) {
+  let deltaFlushRaf = 0;
+  function scheduleDeltaUiFlush() {
+    if (deltaFlushRaf) return;
+    deltaFlushRaf = requestAnimationFrame(async () => {
+      deltaFlushRaf = 0;
+      await nextTick();
+    });
+  }
+
   const url = `${import.meta.env.VITE_API_BASE_URL || ""}/api/agent/chat/stream`;
   const token =
     typeof localStorage !== "undefined" ? localStorage.getItem("token") : null;
@@ -60,10 +69,12 @@ export async function agentChatStream(body, onEvent, signal) {
       try {
         const ev = JSON.parse(raw);
         onEvent(ev);
-        if (ev.type !== "delta") {
+        if (ev.type === "delta") {
+          scheduleDeltaUiFlush();
+        } else {
           agentStreamDbg("event", { type: ev.type, session_id: ev.session_id });
+          await nextTick();
         }
-        await nextTick();
       } catch (e) {
         agentStreamDbg("json-skip", { rawLen: raw.length, err: String(e) });
       }
@@ -94,6 +105,11 @@ export async function agentChatStream(body, onEvent, signal) {
     agentStreamDbg("buffer-flush-tail", { preview: tail.slice(0, 200) });
     await dispatchSseBlock(buffer);
   }
+  if (deltaFlushRaf) {
+    cancelAnimationFrame(deltaFlushRaf);
+    deltaFlushRaf = 0;
+  }
+  await nextTick();
 }
 
 export const agentApi = {

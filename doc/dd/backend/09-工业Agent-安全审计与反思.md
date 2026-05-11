@@ -87,8 +87,8 @@ flowchart LR
 
 ## 7. 与现有智能助手 Agent 的边界
 
-- **通用 `mode=general|rag`**：可仅启用**轻量反思**（质量检查），不启设备审计。  
-- **工业模式**（建议独立 `mode` 或独立路由）：**强制审计 + 执行后验证 + 反思** 按配置逐级开启。
+- **通用 `mode=general` / 知识问答 `mode=rag`**：走标准 `llm ⟷ tools` 路由，**不经过** `audit` / `reflect` 节点（工业专用提示与节流逻辑不启用）。  
+- **`mode=industrial` 与 `mode=vehicle`**（与前端「工业巡检」及具身车控对话对齐）：在拟执行工具前走 **`audit`**，在收尾前按配置走 **`reflect`**（见 §8 实现状态与 `AGENT_INDUSTRIAL_*` 配置）。
 
 ---
 
@@ -107,3 +107,7 @@ flowchart LR
 - **工具并行**（`AGENT_TOOLS_PARALLEL`）：同一轮多个 `tool_call` 并行 `execute`，写回 messages 仍按原顺序。  
 
 `/api/agent/health` 返回 `industrial_audit_tiered`、`tools_parallel`、`industrial_reflection_mode` 便于前端展示。
+
+---
+
+**修订**：2026-05-07 §7 与当前 `general`/`rag` 不经审计、`industrial`/`vehicle` 经 audit/reflect 的实现一致。

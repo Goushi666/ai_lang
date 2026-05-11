@@ -103,7 +103,10 @@ class Settings(BaseSettings):
     AGENT_SESSION_MAX_MESSAGES: int = 50
     AGENT_RAG_ENABLED: bool = True
     AGENT_RAG_TOP_K: int = 5
-    AGENT_CLARIFICATION_ENABLED: bool = True
+    # 澄清器总开关：仅 true 时才会跑澄清逻辑（关闭则零耗时，主对话直接开始）
+    AGENT_CLARIFICATION_ENABLED: bool = False
+    # 开启澄清器后，用户消息不超过该字数时先走本地追问模板、不调用 LLM（极快）；0=关闭此优化，一律走 LLM
+    AGENT_CLARIFICATION_HEURISTIC_FIRST_MAX_CHARS: int = Field(default=16, ge=0, le=200)
     # 澄清器：LLM 给出 clarity_score∈[0,1]，低于此值视为不够清晰并触发第二轮 LLM 生成追问+选项
     AGENT_CLARIFICATION_MIN_CLARITY: float = Field(
         default=0.55,
@@ -111,16 +114,28 @@ class Settings(BaseSettings):
         le=1.0,
         description="清晰度下限；模型评分低于该值则追问（0=极模糊，1=极清晰）",
     )
-    AGENT_CLARIFICATION_JUDGE_TIMEOUT_SEC: float = Field(default=6.0, ge=1.0, le=60.0)
-    AGENT_CLARIFICATION_CLARIFY_TIMEOUT_SEC: float = Field(default=12.0, ge=1.0, le=120.0)
+    AGENT_CLARIFICATION_JUDGE_TIMEOUT_SEC: float = Field(default=8.0, ge=1.0, le=120.0)
+    AGENT_CLARIFICATION_CLARIFY_TIMEOUT_SEC: float = Field(default=10.0, ge=1.0, le=120.0)
+    # True：一次 JSON 同时输出清晰度 +（必要时）追问与选项，模糊场景由两轮 LLM 降为一轮
+    AGENT_CLARIFICATION_ONE_SHOT: bool = True
+    # one-shot 模式下的总等待上限（秒）；两阶段模式仍用上面 judge/clarify 两个超时
+    AGENT_CLARIFICATION_ONE_SHOT_TIMEOUT_SEC: float = Field(default=12.0, ge=2.0, le=180.0)
+    # one-shot 生成 JSON 的 max_tokens，略小可加快收包（追问内容仍应足够）
+    AGENT_CLARIFICATION_ONE_SHOT_MAX_TOKENS: int = Field(default=280, ge=64, le=1024)
+    # 通用/工业模式下，用户消息不超过该字数时，one-shot 失败可启用本地追问模板（避免连续两次 LLM 超时卡死）
+    AGENT_CLARIFICATION_HEURISTIC_MAX_CHARS: int = Field(default=18, ge=0, le=200)
     AGENT_CLARIFICATION_MAX_OPTIONS: int = Field(default=5, ge=2, le=8)
+    # 用户消息达到该字符数时跳过澄清器（不再调用清晰度 LLM）；0=始终判别。长问句通常信息已足，可显著缩短首包前等待。
+    AGENT_CLARIFICATION_SKIP_MIN_USER_CHARS: int = Field(default=96, ge=0, le=20_000)
+    # 逗号分隔 mode：这些模式下整轮跳过澄清器（如 vehicle 短指令「左转」否则会多一次阻塞 LLM）。留空=不按模式跳过。
+    AGENT_CLARIFICATION_SKIP_MODES: str = Field(default="vehicle", description="例: vehicle 或 vehicle,industrial")
     # True：SSE 使用单次流式 chat/completions，token 随上游到达；False：整段生成后再一次性返回（无 delta）
     AGENT_STREAM_ENABLED: bool = True
     # 已废弃：保留以兼容旧 .env，不再读取
     AGENT_STREAM_RAW: bool = False
     AGENT_STREAM_SIMULATE_CHAR_DELAY_MS: int = 12
-    # 流式 SSE：上游常一次推多字。>0 时在服务端把每条 delta 再拆成最多 N 字/码点一段再推送（1≈逐字）；0=不拆
-    AGENT_STREAM_UI_CHUNK_SIZE: int = 1
+    # 流式 SSE：上游常一次推多字。>0 时在服务端把每条 delta 再拆成最多 N 字/码点一段再推送（1≈逐字）；0=不拆（推荐，减少事件数与前端渲染压力）
+    AGENT_STREAM_UI_CHUNK_SIZE: int = 0
     # 每拆一段后 await asyncio.sleep(0)，让出事件循环便于把数据刷到客户端（关闭则仍可能整批缓冲）
     AGENT_STREAM_YIELD_TO_LOOP: bool = True
     # Agent 工具 export_csv_file：导出目录（相对 backend 根）与最大行数
@@ -132,6 +147,8 @@ class Settings(BaseSettings):
     AGENT_INDUSTRIAL_AUDIT_TIERED: bool = True
     # 同一轮多个 tool_call 是否并行执行（结果仍按调用顺序写回 messages）
     AGENT_TOOLS_PARALLEL: bool = True
+    # vehicle 模式仅向 LLM 暴露车/臂/时间/状态工具，缩小 prefill（不查传感器/导出/RAG 时推荐开启）
+    AGENT_VEHICLE_LLM_TOOLS_MINIMAL: bool = True
     # 工业/vehicle：反思 LLM；关闭可显著加速
     AGENT_INDUSTRIAL_REFLECTION_ENABLED: bool = True
     # conditional：无回复 / 达工具上限 / 本 user 轮内已执行过工具 时反思；always / off

@@ -59,3 +59,5 @@ flowchart TB
 ---
 
 **关联**：[08-Agent-LangGraph编排架构.md](./08-Agent-LangGraph编排架构.md)、[07-Agent模块.md](./07-Agent模块.md)。
+
+**修订**：2026-05-07 与当前 FTS 知识库表述一致（语义层与 `KnowledgeService` 同源）；注入顺序仍为 RAG 全量片段（`rag` 模式）之后拼接多层记忆附录。
