@@ -1,0 +1,109 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 900 580" font-family="'Microsoft YaHei', 'PingFang SC', sans-serif">
+  <defs>
+    <linearGradient id="hw" x1="0" y1="0" x2="0" y2="1"><stop offset="0%" stop-color="#f9ca24"/><stop offset="100%" stop-color="#f0932b"/></linearGradient>
+    <linearGradient id="be" x1="0" y1="0" x2="0" y2="1"><stop offset="0%" stop-color="#686de0"/><stop offset="100%" stop-color="#4834d4"/></linearGradient>
+    <linearGradient id="fe" x1="0" y1="0" x2="0" y2="1"><stop offset="0%" stop-color="#6ab04c"/><stop offset="100%" stop-color="#badc58"/></linearGradient>
+    <linearGradient id="ai" x1="0" y1="0" x2="0" y2="1"><stop offset="0%" stop-color="#e056a0"/><stop offset="100%" stop-color="#be2edd"/></linearGradient>
+    <filter id="sh"><feDropShadow dx="0" dy="3" stdDeviation="4" flood-opacity="0.1"/></filter>
+  </defs>
+
+  <!-- Title -->
+  <text x="450" y="38" text-anchor="middle" font-size="22" font-weight="bold" fill="#2c3e50">系统功能模块图</text>
+  <line x1="280" y1="50" x2="620" y2="50" stroke="#e0e0e0" stroke-width="1"/>
+
+  <!-- ===== 硬件端 ===== -->
+  <rect x="40" y="70" width="380" height="230" rx="12" fill="#fff" stroke="#f0932b" stroke-width="2" filter="url(#sh)"/>
+  <rect x="40" y="70" width="380" height="42" rx="12" fill="url(#hw)"/>
+  <rect x="40" y="100" width="380" height="12" fill="url(#hw)"/>
+  <text x="230" y="97" text-anchor="middle" font-size="16" font-weight="bold" fill="#fff">硬件端（感知层）— 树莓派 4B</text>
+
+  <rect x="60" y="125" width="165" height="36" rx="6" fill="#fff3e0" stroke="#f0932b" stroke-width="1"/>
+  <text x="142" y="148" text-anchor="middle" font-size="12" fill="#e67e22">传感器数据采集</text>
+  <rect x="240" y="125" width="165" height="36" rx="6" fill="#fff3e0" stroke="#f0932b" stroke-width="1"/>
+  <text x="322" y="148" text-anchor="middle" font-size="12" fill="#e67e22">MQTT 通信模块</text>
+  <rect x="60" y="172" width="165" height="36" rx="6" fill="#fff3e0" stroke="#f0932b" stroke-width="1"/>
+  <text x="142" y="195" text-anchor="middle" font-size="12" fill="#e67e22">电机驱动与运动控制</text>
+  <rect x="240" y="172" width="165" height="36" rx="6" fill="#fff3e0" stroke="#f0932b" stroke-width="1"/>
+  <text x="322" y="195" text-anchor="middle" font-size="12" fill="#e67e22">OpenCV 自主循迹</text>
+  <rect x="60" y="219" width="165" height="36" rx="6" fill="#fff3e0" stroke="#f0932b" stroke-width="1"/>
+  <text x="142" y="242" text-anchor="middle" font-size="12" fill="#e67e22">PCA9685 舵机控制</text>
+  <rect x="240" y="219" width="165" height="36" rx="6" fill="#fff3e0" stroke="#f0932b" stroke-width="1"/>
+  <text x="322" y="242" text-anchor="middle" font-size="12" fill="#e67e22">MJPEG 视频流服务</text>
+  <rect x="60" y="265" width="345" height="28" rx="6" fill="#fff8e1" stroke="#f9ca24" stroke-width="1" stroke-dasharray="4,2"/>
+  <text x="232" y="284" text-anchor="middle" font-size="11" fill="#b7950b">DHT11/22 · BH1750 · L298N · PCA9685 · USB摄像头</text>
+
+  <!-- ===== 后端 ===== -->
+  <rect x="460" y="70" width="400" height="230" rx="12" fill="#fff" stroke="#4834d4" stroke-width="2" filter="url(#sh)"/>
+  <rect x="460" y="70" width="400" height="42" rx="12" fill="url(#be)"/>
+  <rect x="460" y="100" width="400" height="12" fill="url(#be)"/>
+  <text x="660" y="97" text-anchor="middle" font-size="16" font-weight="bold" fill="#fff">后端服务（平台层）— FastAPI</text>
+
+  <rect x="480" y="125" width="175" height="36" rx="6" fill="#e8eaf6" stroke="#4834d4" stroke-width="1"/>
+  <text x="567" y="148" text-anchor="middle" font-size="12" fill="#3f51b5">传感器数据服务</text>
+  <rect x="668" y="125" width="175" height="36" rx="6" fill="#e8eaf6" stroke="#4834d4" stroke-width="1"/>
+  <text x="755" y="148" text-anchor="middle" font-size="12" fill="#3f51b5">告警管理服务</text>
+  <rect x="480" y="172" width="175" height="36" rx="6" fill="#e8eaf6" stroke="#4834d4" stroke-width="1"/>
+  <text x="567" y="195" text-anchor="middle" font-size="12" fill="#3f51b5">环境分析服务</text>
+  <rect x="668" y="172" width="175" height="36" rx="6" fill="#e8eaf6" stroke="#4834d4" stroke-width="1"/>
+  <text x="755" y="195" text-anchor="middle" font-size="12" fill="#3f51b5">车辆控制服务</text>
+  <rect x="480" y="219" width="175" height="36" rx="6" fill="#e8eaf6" stroke="#4834d4" stroke-width="1"/>
+  <text x="567" y="242" text-anchor="middle" font-size="12" fill="#3f51b5">智能 Agent 服务</text>
+  <rect x="668" y="219" width="175" height="36" rx="6" fill="#e8eaf6" stroke="#4834d4" stroke-width="1"/>
+  <text x="755" y="242" text-anchor="middle" font-size="12" fill="#3f51b5">知识库服务 (FTS5)</text>
+  <rect x="480" y="265" width="363" height="28" rx="6" fill="#ede7f6" stroke="#7c4dff" stroke-width="1" stroke-dasharray="4,2"/>
+  <text x="661" y="284" text-anchor="middle" font-size="11" fill="#5e35b1">WebSocket 推送 · MQTT 接入 · JWT 鉴权 · SSE 流式</text>
+
+  <!-- Arrow between HW and BE -->
+  <line x1="420" y1="185" x2="460" y2="185" stroke="#8899aa" stroke-width="2" marker-end="url(#arrowRight)"/>
+  <defs><marker id="arrowRight" markerWidth="8" markerHeight="6" refX="4" refY="3" orient="auto"><path d="M0,0 L8,3 L0,6 Z" fill="#8899aa"/></marker></defs>
+
+  <!-- ===== Frontend ===== -->
+  <rect x="40" y="320" width="380" height="140" rx="12" fill="#fff" stroke="#6ab04c" stroke-width="2" filter="url(#sh)"/>
+  <rect x="40" y="320" width="380" height="42" rx="12" fill="url(#fe)"/>
+  <rect x="40" y="350" width="380" height="12" fill="url(#fe)"/>
+  <text x="230" y="347" text-anchor="middle" font-size="16" font-weight="bold" fill="#2c3e50">前端应用（应用层）— Vue 3</text>
+
+  <rect x="60" y="375" width="110" height="32" rx="6" fill="#f1f8e9" stroke="#6ab04c" stroke-width="1"/>
+  <text x="115" y="396" text-anchor="middle" font-size="12" fill="#2e7d32">仪表盘</text>
+  <rect x="185" y="375" width="100" height="32" rx="6" fill="#f1f8e9" stroke="#6ab04c" stroke-width="1"/>
+  <text x="235" y="396" text-anchor="middle" font-size="12" fill="#2e7d32">告警中心</text>
+  <rect x="300" y="375" width="105" height="32" rx="6" fill="#f1f8e9" stroke="#6ab04c" stroke-width="1"/>
+  <text x="352" y="396" text-anchor="middle" font-size="12" fill="#2e7d32">视频巡检</text>
+  <rect x="60" y="418" width="110" height="32" rx="6" fill="#f1f8e9" stroke="#6ab04c" stroke-width="1"/>
+  <text x="115" y="439" text-anchor="middle" font-size="12" fill="#2e7d32">智能助手</text>
+  <rect x="185" y="418" width="100" height="32" rx="6" fill="#f1f8e9" stroke="#6ab04c" stroke-width="1"/>
+  <text x="235" y="439" text-anchor="middle" font-size="12" fill="#2e7d32">车辆遥控</text>
+  <rect x="300" y="418" width="105" height="32" rx="6" fill="#f1f8e9" stroke="#6ab04c" stroke-width="1"/>
+  <text x="352" y="439" text-anchor="middle" font-size="12" fill="#2e7d32">系统设置</text>
+
+  <!-- AI Module -->
+  <rect x="460" y="320" width="400" height="140" rx="12" fill="#fff" stroke="#be2edd" stroke-width="2" filter="url(#sh)"/>
+  <rect x="460" y="320" width="400" height="42" rx="12" fill="url(#ai)"/>
+  <rect x="460" y="350" width="400" height="12" fill="url(#ai)"/>
+  <text x="660" y="347" text-anchor="middle" font-size="16" font-weight="bold" fill="#fff">智能 Agent 引擎</text>
+
+  <rect x="480" y="375" width="175" height="32" rx="6" fill="#fce4ec" stroke="#be2edd" stroke-width="1"/>
+  <text x="567" y="396" text-anchor="middle" font-size="12" fill="#ad1457">LLM 工具调用 (FC)</text>
+  <rect x="668" y="375" width="175" height="32" rx="6" fill="#fce4ec" stroke="#be2edd" stroke-width="1"/>
+  <text x="755" y="396" text-anchor="middle" font-size="12" fill="#ad1457">RAG 知识检索</text>
+  <rect x="480" y="418" width="175" height="32" rx="6" fill="#fce4ec" stroke="#be2edd" stroke-width="1"/>
+  <text x="567" y="439" text-anchor="middle" font-size="12" fill="#ad1457">意图澄清器 Clarifier</text>
+  <rect x="668" y="418" width="175" height="32" rx="6" fill="#fce4ec" stroke="#be2edd" stroke-width="1"/>
+  <text x="755" y="439" text-anchor="middle" font-size="12" fill="#ad1457">SSE 流式输出</text>
+
+  <!-- Arrow from BE to FE -->
+  <line x1="230" y1="300" x2="230" y2="320" stroke="#8899aa" stroke-width="2" marker-end="url(#arrowDown)"/>
+  <defs><marker id="arrowDown" markerWidth="8" markerHeight="6" refX="4" refY="3" orient="auto"><path d="M0,0 L8,3 L0,6 Z" fill="#8899aa"/></marker></defs>
+  <line x1="660" y1="300" x2="660" y2="320" stroke="#8899aa" stroke-width="2" marker-end="url(#arrowDown)"/>
+
+  <!-- Data flow legend -->
+  <rect x="40" y="478" width="820" height="45" rx="8" fill="#f8f9fa" stroke="#e9ecef" stroke-width="1"/>
+  <text x="65" y="498" font-size="12" fill="#6c757d">传感器数据：</text>
+  <text x="155" y="498" font-size="12" fill="#495057">MQTT → 后端 ingest → DB + WebSocket → 前端</text>
+  <text x="65" y="515" font-size="12" fill="#6c757d">控制指令：</text>
+  <text x="155" y="515" font-size="12" fill="#495057">前端 REST → 后端 → MQTT → 树莓派 → GPIO/I2C/PWM 执行</text>
+  <text x="480" y="498" font-size="12" fill="#6c757d">视频流：</text>
+  <text x="530" y="498" font-size="12" fill="#495057">树莓派 MJPEG/HLS → 浏览器直连拉流（不经业务后端）</text>
+  <text x="480" y="515" font-size="12" fill="#6c757d">AI 对话：</text>
+  <text x="530" y="515" font-size="12" fill="#495057">前端 SSE ← 后端 Agent → LLM API → Tool Calls → 结果</text>
+</svg>
